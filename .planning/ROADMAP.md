@@ -21,7 +21,11 @@ Build a consumer-friendly Stage 1 NanoQuant pipeline for MoE models, starting fr
   2. Output directory contains a serializable checkpoint with binary matrices and scales that can be loaded back
   3. Sub-1-bit quantization (0.7–0.9 bits) is the default mode and produces a quantized model
   4. Console shows real-time progress with ETA and current VRAM usage during quantization
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Hardware auto-detection module + safetensors checkpoint module
+- [ ] 01-02-PLAN.md — Pipeline integration (hardware probe, binary factor collection, progress logging, sub-1-bit config)
 
 ### Phase 2: MoE Support
 **Goal**: The pipeline correctly handles OLMoE and Qwen MoE expert tensor layouts, treating all layer types uniformly through WeightView
