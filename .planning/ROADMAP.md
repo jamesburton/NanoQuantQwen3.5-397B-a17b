@@ -24,7 +24,7 @@ Build a consumer-friendly Stage 1 NanoQuant pipeline for MoE models, starting fr
 **Plans**: 2 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Hardware auto-detection module + safetensors checkpoint module
+- [x] 01-01-PLAN.md — Hardware auto-detection module + safetensors checkpoint module
 - [ ] 01-02-PLAN.md — Pipeline integration (hardware probe, binary factor collection, progress logging, sub-1-bit config)
 
 ### Phase 2: MoE Support
@@ -54,6 +54,6 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Pipeline Foundation | 0/TBD | Not started | - |
+| 1. Pipeline Foundation | 1/2 | In progress | - |
 | 2. MoE Support | 0/TBD | Not started | - |
 | 3. Scaling and Evaluation | 0/TBD | Not started | - |
