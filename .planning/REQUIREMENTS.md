@@ -68,28 +68,28 @@ Requirements for initial release. Focused on Stage 1 pipeline with progressive m
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PIPE-01 | TBD | Pending |
-| PIPE-02 | TBD | Pending |
-| PIPE-03 | TBD | Pending |
-| PIPE-04 | TBD | Pending |
-| PIPE-05 | TBD | Pending |
-| MOE-01 | TBD | Pending |
-| MOE-02 | TBD | Pending |
-| MOE-03 | TBD | Pending |
-| MOE-04 | TBD | Pending |
-| SCALE-01 | TBD | Pending |
-| SCALE-02 | TBD | Pending |
-| SCALE-03 | TBD | Pending |
-| SCALE-04 | TBD | Pending |
-| EVAL-01 | TBD | Pending |
-| EVAL-02 | TBD | Pending |
-| EVAL-03 | TBD | Pending |
+| PIPE-01 | Phase 1 | Pending |
+| PIPE-02 | Phase 1 | Pending |
+| PIPE-03 | Phase 1 | Pending |
+| PIPE-04 | Phase 1 | Pending |
+| PIPE-05 | Phase 1 | Pending |
+| MOE-01 | Phase 2 | Pending |
+| MOE-02 | Phase 2 | Pending |
+| MOE-03 | Phase 2 | Pending |
+| MOE-04 | Phase 2 | Pending |
+| SCALE-01 | Phase 3 | Pending |
+| SCALE-02 | Phase 3 | Pending |
+| SCALE-03 | Phase 3 | Pending |
+| SCALE-04 | Phase 3 | Pending |
+| EVAL-01 | Phase 3 | Pending |
+| EVAL-02 | Phase 3 | Pending |
+| EVAL-03 | Phase 3 | Pending |
 
 **Coverage:**
 - v1 requirements: 16 total
-- Mapped to phases: 0
-- Unmapped: 16 ⚠️
+- Mapped to phases: 16
+- Unmapped: 0 ✓
 
 ---
 *Requirements defined: 2026-02-22*
-*Last updated: 2026-02-22 after initial definition*
+*Last updated: 2026-02-22 — traceability populated after roadmap creation*

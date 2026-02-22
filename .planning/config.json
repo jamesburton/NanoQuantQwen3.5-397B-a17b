@@ -1,0 +1,10 @@
+{
+  "workflow": "gsd-v1",
+  "conventions": "standard",
+  "tech_stack": ["python", "pytorch", "transformers", "accelerate"],
+  "preferences": {
+    "auto_verify": true,
+    "parallel_tasks": true,
+    "offloading": "enabled"
+  }
+}
