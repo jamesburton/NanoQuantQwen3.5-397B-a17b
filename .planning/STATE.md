@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-22)
 ## Current Position
 
 Phase: 1 of 3 (Pipeline Foundation)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-02-22 — Completed plan 01-01 (hardware.py, checkpoint.py)
+Plan: 2 of 2 in current phase
+Status: Phase 1 complete
+Last activity: 2026-02-22 — Completed plan 01-02 (quantize.py + run_stage1.py integration)
 
-Progress: [█░░░░░░░░░] 10%
+Progress: [██░░░░░░░░] 20%
 
 ## Performance Metrics
 
@@ -38,6 +38,9 @@ Progress: [█░░░░░░░░░] 10%
 - model_load_strategy always "cpu" — block-by-block .to(device) is correct for quantization; device_map="auto" scatters layers and breaks sequential processing
 - Safetensors dotted key format (layer_name.tensor_key) chosen for MoE expert forward-compatibility
 - 1 GB GPU headroom + 10% CPU headroom hardcoded as constants, not user-configurable
+- psutil import at module top-level in quantize.py (was inline in Phase 3 KD block)
+- eval_device in run_stage1.py derives from torch.cuda.is_available() independently of quantize_model hardware detection
+- bits_per_weight -> rank: rank = max(1, int(bpw * d / 2)) using first Linear layer's min dimension
 
 ### Pending Todos
 
@@ -50,5 +53,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-22
-Stopped at: Completed 01-01-PLAN.md (hardware.py + checkpoint.py)
+Stopped at: Completed 01-02-PLAN.md (quantize.py + run_stage1.py pipeline integration)
 Resume file: None

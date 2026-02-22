@@ -9,11 +9,11 @@ Requirements for initial release. Focused on Stage 1 pipeline with progressive m
 
 ### Pipeline Core
 
-- [ ] **PIPE-01**: Stage 1 pipeline runs end-to-end (Hessian capture → ADMM init → block-wise reconstruction) on a single model
+- [x] **PIPE-01**: Stage 1 pipeline runs end-to-end (Hessian capture → ADMM init → block-wise reconstruction) on a single model
 - [x] **PIPE-02**: Pipeline operates within 12GB VRAM via CPU/NVMe offloading through Accelerate
-- [ ] **PIPE-03**: Pipeline supports sub-1-bit quantization (0.7–0.9 bits) as primary mode per NanoQuant paper
+- [x] **PIPE-03**: Pipeline supports sub-1-bit quantization (0.7–0.9 bits) as primary mode per NanoQuant paper
 - [x] **PIPE-04**: Pipeline produces serializable quantized checkpoint (binary matrices + scales)
-- [ ] **PIPE-05**: Pipeline provides progress logging with ETA and memory usage tracking
+- [x] **PIPE-05**: Pipeline provides progress logging with ETA and memory usage tracking
 
 ### MoE Support
 
@@ -68,11 +68,11 @@ Requirements for initial release. Focused on Stage 1 pipeline with progressive m
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PIPE-01 | Phase 1 | Pending |
+| PIPE-01 | Phase 1 | Complete |
 | PIPE-02 | Phase 1 | Complete |
-| PIPE-03 | Phase 1 | Pending |
+| PIPE-03 | Phase 1 | Complete |
 | PIPE-04 | Phase 1 | Complete |
-| PIPE-05 | Phase 1 | Pending |
+| PIPE-05 | Phase 1 | Complete |
 | MOE-01 | Phase 2 | Pending |
 | MOE-02 | Phase 2 | Pending |
 | MOE-03 | Phase 2 | Pending |

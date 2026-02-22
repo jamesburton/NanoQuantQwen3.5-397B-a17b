@@ -6,7 +6,7 @@ Build a consumer-friendly Stage 1 NanoQuant pipeline for MoE models, starting fr
 
 ## Phases
 
-- [ ] **Phase 1: Pipeline Foundation** - Stage 1 runs end-to-end within 12GB VRAM on a single model
+- [x] **Phase 1: Pipeline Foundation** - Stage 1 runs end-to-end within 12GB VRAM on a single model
 - [ ] **Phase 2: MoE Support** - WeightView abstractions handle OLMoE and Qwen expert tensor layouts
 - [ ] **Phase 3: Scaling and Evaluation** - Progressive validation across four model sizes with PPL baselines
 
@@ -25,7 +25,7 @@ Build a consumer-friendly Stage 1 NanoQuant pipeline for MoE models, starting fr
 
 Plans:
 - [x] 01-01-PLAN.md — Hardware auto-detection module + safetensors checkpoint module
-- [ ] 01-02-PLAN.md — Pipeline integration (hardware probe, binary factor collection, progress logging, sub-1-bit config)
+- [x] 01-02-PLAN.md — Pipeline integration (hardware probe, binary factor collection, progress logging, sub-1-bit config)
 
 ### Phase 2: MoE Support
 **Goal**: The pipeline correctly handles OLMoE and Qwen MoE expert tensor layouts, treating all layer types uniformly through WeightView
@@ -54,6 +54,6 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Pipeline Foundation | 1/2 | In progress | - |
+| 1. Pipeline Foundation | 2/2 | Complete | 2026-02-22 |
 | 2. MoE Support | 0/TBD | Not started | - |
 | 3. Scaling and Evaluation | 0/TBD | Not started | - |
