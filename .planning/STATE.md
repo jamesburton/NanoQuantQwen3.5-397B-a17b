@@ -10,9 +10,9 @@ See: .planning/PROJECT.md (updated 2026-02-22)
 ## Current Position
 
 Phase: 1 of 3 (Pipeline Foundation)
-Plan: 2 of 2 in current phase
+Plan: 3 of 3 in current phase
 Status: Phase 1 complete
-Last activity: 2026-02-22 — Completed plan 01-02 (quantize.py + run_stage1.py integration)
+Last activity: 2026-02-23 — Completed plan 01-03 (hardware summary fix + dstorage-gpu detection)
 
 Progress: [██░░░░░░░░] 20%
 
@@ -30,6 +30,7 @@ Progress: [██░░░░░░░░] 20%
 | - | - | - | - |
 
 *Updated after each plan completion*
+| Phase 01-pipeline-foundation P03 | 2 | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -41,6 +42,7 @@ Progress: [██░░░░░░░░] 20%
 - psutil import at module top-level in quantize.py (was inline in Phase 3 KD block)
 - eval_device in run_stage1.py derives from torch.cuda.is_available() independently of quantize_model hardware detection
 - bits_per_weight -> rank: rank = max(1, int(bpw * d / 2)) using first Linear layer's min dimension
+- [Phase 01-pipeline-foundation]: print_hardware_summary shows compute= and model_load= as separate fields for clarity
 
 ### Pending Todos
 
@@ -52,6 +54,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-22
-Stopped at: Completed 01-02-PLAN.md (quantize.py + run_stage1.py pipeline integration)
+Last session: 2026-02-23
+Stopped at: Completed 01-03-PLAN.md (hardware summary fix + dstorage-gpu detection)
 Resume file: None
