@@ -1,0 +1,11 @@
+torch>=2.2.0
+transformers>=4.45.0
+datasets
+accelerate
+sentencepiece
+einops
+tqdm
+numpy
+scipy
+psutil
+dstorage-gpu; sys_platform == "win32"

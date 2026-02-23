@@ -1,5 +1,6 @@
 """Hardware auto-detection and adaptive plan for NanoQuant pipeline."""
 
+import sys
 from dataclasses import dataclass
 
 import psutil
@@ -23,6 +24,7 @@ class HardwarePlan:
     hessian_on_disk: bool      # False for Phase 1 — Hessian diagonals are tiny
     model_load_strategy: str   # "cpu" | "disk_offload" | "auto_dispatch"
     device: str                # "cuda" or "cpu"
+    dstorage_available: bool   # True if dstorage-gpu is installed (Windows only)
 
 
 def probe_hardware(offload_dir: str = ".") -> HardwarePlan:
@@ -71,6 +73,15 @@ def probe_hardware(offload_dir: str = ".") -> HardwarePlan:
     # layers across devices and breaks sequential block processing.
     model_load_strategy = "cpu"
 
+    # ---- DirectStorage detection (Windows only) ----
+    dstorage_available = False
+    if sys.platform == "win32" and cuda_available:
+        try:
+            import dstorage  # dstorage-gpu package  # noqa: F401
+            dstorage_available = True
+        except ImportError:
+            pass
+
     return HardwarePlan(
         gpu_free_bytes=gpu_free_bytes,
         cpu_free_bytes=cpu_free_bytes,
@@ -80,6 +91,7 @@ def probe_hardware(offload_dir: str = ".") -> HardwarePlan:
         hessian_on_disk=False,
         model_load_strategy=model_load_strategy,
         device=device,
+        dstorage_available=dstorage_available,
     )
 
 
@@ -87,14 +99,20 @@ def print_hardware_summary(plan: HardwarePlan) -> None:
     """Print a one-line human-readable hardware summary.
 
     Example output:
-        Hardware: GPU=10.2GB usable, CPU=28.4GB usable, disk=145.3GB free, strategy=cpu
+        Hardware: GPU=10.2GB usable | CPU=28.4GB | disk=145.3GB | compute=cuda, model_load=cpu | dstorage=yes
     """
     gpu_gb = plan.gpu_free_bytes / _GB
     cpu_gb = plan.cpu_free_bytes / _GB
     disk_gb = plan.disk_free_bytes / _GB
-    print(
-        f"Hardware: GPU={gpu_gb:.1f}GB usable, "
-        f"CPU={cpu_gb:.1f}GB usable, "
-        f"disk={disk_gb:.1f}GB free, "
-        f"strategy={plan.model_load_strategy}"
-    )
+
+    parts = [
+        f"GPU={gpu_gb:.1f}GB usable",
+        f"CPU={cpu_gb:.1f}GB",
+        f"disk={disk_gb:.1f}GB",
+        f"compute={plan.device}, model_load={plan.model_load_strategy}",
+    ]
+
+    if sys.platform == "win32":
+        parts.append(f"dstorage={'yes' if plan.dstorage_available else 'no'}")
+
+    print("Hardware: " + " | ".join(parts))
