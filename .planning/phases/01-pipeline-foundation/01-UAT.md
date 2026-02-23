@@ -1,9 +1,9 @@
 ---
-status: complete
+status: diagnosed
 phase: 01-pipeline-foundation
 source: [01-01-SUMMARY.md, 01-02-SUMMARY.md]
 started: 2026-02-22T22:42:06Z
-updated: 2026-02-23T00:10:00Z
+updated: 2026-02-23T00:15:00Z
 ---
 
 ## Current Test
@@ -57,5 +57,16 @@ skipped: 0
   reason: "User reported: Summary shows strategy=cpu even with 10GB GPU. Should display device=cuda and clarify what is on cpu vs gpu. Also need dstorage-gpu for Windows DirectStorage direct-to-GPU loading."
   severity: major
   test: 1
-  artifacts: []
-  missing: []
+  root_cause: "print_hardware_summary() only prints model_load_strategy (hardcoded 'cpu' by design for model loading) but omits the device field which controls actual GPU computation. Display bug, not logic bug."
+  artifacts:
+    - path: "nanoquant/hardware.py"
+      issue: "print_hardware_summary() lines 95-100 omit plan.device; docstring example stale"
+    - path: "nanoquant/hardware.py"
+      issue: "HardwarePlan dataclass missing dstorage_available field; no dstorage-gpu detection"
+    - path: "requirements.txt"
+      issue: "dstorage-gpu not listed as optional Windows dependency"
+  missing:
+    - "Add device= to print_hardware_summary() output"
+    - "Add dstorage_available field to HardwarePlan dataclass"
+    - "Add dstorage-gpu detection logic in probe_hardware()"
+    - "Add dstorage-gpu to requirements.txt with sys_platform=='win32' guard"
