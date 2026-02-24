@@ -53,7 +53,12 @@ Plans:
   3. Qwen3.5-397B-A17B completes Stage 1 quantization (cloud GPU acceptable)
   4. WikiText-2 perplexity is measured and reported for both FP16 baseline and quantized version of each model
   5. Memory footprint report shows model size before/after quantization and peak VRAM for each run
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 03-01-PLAN.md — Fix eval PPL computation + metrics/reporting infrastructure
+- [ ] 03-02-PLAN.md — Local GPU runs: OLMoE-1B-7B + Qwen1.5-MoE-A2.7B
+- [ ] 03-03-PLAN.md — Cloud GPU runs: Qwen2-57B + Qwen3.5-397B
 
 ## Progress
 
@@ -61,4 +66,4 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Pipeline Foundation | 3/3 | Complete   | 2026-02-23 |
 | 2. MoE Support | 2/2 | Complete   | 2026-02-24 |
-| 3. Scaling and Evaluation | 0/TBD | Not started | - |
+| 3. Scaling and Evaluation | 0/3 | Not started | - |
