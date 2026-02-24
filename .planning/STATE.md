@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Consumer-friendly sub-1-bit quantization of MoE models via NanoQuant's ADMM-based pipeline
-**Current focus:** Phase 1 - Pipeline Foundation
+**Current focus:** Phase 2 - MoE Support
 
 ## Current Position
 
-Phase: 1 of 3 (Pipeline Foundation)
-Plan: 3 of 3 in current phase
-Status: Phase 1 complete
-Last activity: 2026-02-23 — Completed plan 01-03 (hardware summary fix + dstorage-gpu detection)
+Phase: 2 of 3 (MoE Support)
+Plan: 1 of 2 in current phase
+Status: In Progress
+Last activity: 2026-02-24 — Completed plan 02-01 (FUSED_EXPERT_CLASSES dispatch table for MoE expert types)
 
-Progress: [██░░░░░░░░] 20%
+Progress: [███░░░░░░░] 30%
 
 ## Performance Metrics
 
@@ -31,6 +31,7 @@ Progress: [██░░░░░░░░] 20%
 
 *Updated after each plan completion*
 | Phase 01-pipeline-foundation P03 | 2 | 1 tasks | 2 files |
+| Phase 02-moe-support P01 | 5 | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -43,6 +44,7 @@ Progress: [██░░░░░░░░] 20%
 - eval_device in run_stage1.py derives from torch.cuda.is_available() independently of quantize_model hardware detection
 - bits_per_weight -> rank: rank = max(1, int(bpw * d / 2)) using first Linear layer's min dimension
 - [Phase 01-pipeline-foundation]: print_hardware_summary shows compute= and model_load= as separate fields for clarity
+- [Phase 02-moe-support]: Use frozenset dispatch table (FUSED_EXPERT_CLASSES) for fused expert module type matching — enables adding new architectures by updating one set
 
 ### Pending Todos
 
@@ -54,6 +56,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-23
-Stopped at: Completed 01-03-PLAN.md (hardware summary fix + dstorage-gpu detection)
+Last session: 2026-02-24
+Stopped at: Completed 02-01-PLAN.md (FUSED_EXPERT_CLASSES dispatch table for MoE expert types)
 Resume file: None

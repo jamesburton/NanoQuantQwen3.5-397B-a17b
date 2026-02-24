@@ -60,5 +60,5 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Pipeline Foundation | 3/3 | Complete   | 2026-02-23 |
-| 2. MoE Support | 0/2 | Planned | - |
+| 2. MoE Support | 1/2 | In Progress|  |
 | 3. Scaling and Evaluation | 0/TBD | Not started | - |
