@@ -69,6 +69,10 @@ def main():
         "--bits-per-weight", type=float, default=None,
         help="Target bits per weight (0.55, 0.80, 1.00). Overrides --rank with computed value. Default: use --rank directly."
     )
+    parser.add_argument(
+        "--parallel-blocks", type=int, default=1,
+        help="Number of blocks to process in parallel (MOE-04 stub, default 1 = sequential)."
+    )
     args = parser.parse_args()
 
     if args.checkpoint_dir is None:

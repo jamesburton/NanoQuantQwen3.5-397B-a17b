@@ -7,14 +7,31 @@ import torch
 import torch.nn as nn
 from typing import Optional, Dict, Any
 from tqdm import tqdm
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 from datasets import load_dataset
 
 from nanoquant.hessian import capture_hessians, robust_diagonal
 from nanoquant.reconstruct import reconstruct_block, set_rotary_emb, _call_block
 from nanoquant.refine import tune_scales_kd
 from nanoquant.hardware import probe_hardware, print_hardware_summary
-from nanoquant.checkpoint import save_quantized_checkpoint
+from nanoquant.checkpoint import save_quantized_checkpoint, collect_shared_layers
+
+# Re-export _call_block as the canonical block runner — it handles
+# rotary embedding negotiation robustly across model architectures.
+_run_block = _call_block
+
+
+def detect_architecture(model_name_or_path: str) -> str:
+    """Detect model architecture type from HuggingFace config.
+
+    Args:
+        model_name_or_path: HuggingFace model name or local path.
+
+    Returns:
+        model_type string from config (e.g. 'qwen2_moe', 'llama', 'unknown').
+    """
+    config = AutoConfig.from_pretrained(model_name_or_path, trust_remote_code=True)
+    return getattr(config, "model_type", "unknown")
 
 
 def _load_calibration_data(tokenizer, n_calibration: int = 128, seq_len: int = 2048):
@@ -122,6 +139,9 @@ def quantize_model(
     model.eval()
     print(f"Model loaded on CPU")
 
+    arch_type = detect_architecture(model_name_or_path)
+    print(f"  Architecture: {arch_type}")
+
     # Provide model-level rotary embedding to reconstruct_block
     inner = getattr(model, "model", model)
     if hasattr(inner, "rotary_emb"):
@@ -146,11 +166,19 @@ def quantize_model(
     cal_data = _load_calibration_data(tokenizer, n_calibration, seq_len)
     dataloader = _make_dataloader(cal_data, batch_size=1)
 
-    # ========= Phase 1: Capture Hessians (CPU) =========
+    # ========= Phase 1: Capture Hessians =========
     # Hooks accumulate only 1D diagonal vectors — negligible memory overhead.
-    # Running on CPU avoids VRAM OOM; calibration with small n is fast enough.
-    print("\n=== Phase 1: Capturing Hessians (CPU) ===")
-    hessians = capture_hessians(model, dataloader, device="cpu")
+    # Use GPU if available: model processes one sample at a time so peak VRAM
+    # is just the model + one batch of activations.  For small models this is
+    # ~100x faster than CPU.  Fall back to CPU if the model is too large.
+    hessian_device = device  # auto-detected compute device
+    print(f"\n=== Phase 1: Capturing Hessians ({hessian_device}) ===")
+    if hessian_device != "cpu":
+        model.to(hessian_device)
+    hessians = capture_hessians(model, dataloader, device=hessian_device)
+    if hessian_device != "cpu":
+        model.cpu()
+        torch.cuda.empty_cache()
     print(f"  Captured Hessians for {len(hessians)} layers")
 
     # ========= Phase 2: Block-wise reconstruction =========
@@ -183,28 +211,6 @@ def quantize_model(
         cal_subset = cal_data[:8].to(device)  # (8, seq_len)
         block_input = embed(cal_subset).to(model_dtype)  # (8, seq_len, hidden)
     embed.cpu()
-
-    # Pre-compute rotary embeddings on the compute device for block calls
-    _rotary_emb_mod = None
-    inner = getattr(model, "model", model)
-    if hasattr(inner, "rotary_emb"):
-        _rotary_emb_mod = inner.rotary_emb
-
-    def _run_block(blk, x):
-        """Run a block with position_embeddings for Qwen2-style models."""
-        if _rotary_emb_mod is not None:
-            bsz = x.shape[0]
-            seq = x.shape[1] if x.dim() == 3 else 1
-            dev = x.device
-            pos_ids = torch.arange(seq, device=dev).unsqueeze(0).expand(bsz, -1)
-            _rotary_emb_mod.to(dev)
-            with torch.no_grad():
-                cos, sin = _rotary_emb_mod(x, pos_ids)
-            return blk(x, position_embeddings=(cos, sin))[0]
-        try:
-            return blk(x)[0]
-        except TypeError:
-            return blk(x, attention_mask=None)[0]
 
     # Pass through already-processed blocks to get correct input for start_block
     for i in range(start_block):
@@ -311,8 +317,12 @@ def quantize_model(
     model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
 
+    # Collect shared layers (norms, embeddings) for self-contained checkpoint
+    shared_layers = collect_shared_layers(model)
+    print(f"  Collected {len(shared_layers)} shared layers for self-contained checkpoint")
+
     # Save binary factors as safetensors alongside the FP16 model
-    save_quantized_checkpoint(all_quantized, output_dir, model_name_or_path, rank)
+    save_quantized_checkpoint(all_quantized, output_dir, model_name_or_path, rank, shared_layers=shared_layers)
     print(f"Saved binary factor checkpoint ({len(all_quantized)} layers)")
 
     # Print effective bpw from actual tensor sizes
