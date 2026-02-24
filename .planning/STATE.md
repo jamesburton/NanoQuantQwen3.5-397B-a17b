@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-02-22)
 ## Current Position
 
 Phase: 2 of 3 (MoE Support)
-Plan: 1 of 2 in current phase
+Plan: 2 of 5 in current phase
 Status: In Progress
-Last activity: 2026-02-24 — Completed plan 02-01 (FUSED_EXPERT_CLASSES dispatch table for MoE expert types)
+Last activity: 2026-02-24 — Completed plan 02-02 (self-contained checkpoint + architecture detection)
 
-Progress: [███░░░░░░░] 30%
+Progress: [████░░░░░░] 40%
 
 ## Performance Metrics
 
@@ -32,6 +32,7 @@ Progress: [███░░░░░░░] 30%
 *Updated after each plan completion*
 | Phase 01-pipeline-foundation P03 | 2 | 1 tasks | 2 files |
 | Phase 02-moe-support P01 | 5 | 1 tasks | 1 files |
+| Phase 02-moe-support P02 | 10 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -45,6 +46,8 @@ Progress: [███░░░░░░░] 30%
 - bits_per_weight -> rank: rank = max(1, int(bpw * d / 2)) using first Linear layer's min dimension
 - [Phase 01-pipeline-foundation]: print_hardware_summary shows compute= and model_load= as separate fields for clarity
 - [Phase 02-moe-support]: Use frozenset dispatch table (FUSED_EXPERT_CLASSES) for fused expert module type matching — enables adding new architectures by updating one set
+- [Phase 02-moe-support P02]: shared. prefix chosen for norm/embedding keys to distinguish from binary factor dotted keys in safetensors
+- [Phase 02-moe-support P02]: collect_shared_layers uses named_modules traversal with class-name check to stay architecture-agnostic
 
 ### Pending Todos
 
@@ -57,5 +60,5 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-24
-Stopped at: Completed 02-01-PLAN.md (FUSED_EXPERT_CLASSES dispatch table for MoE expert types)
+Stopped at: Completed 02-02-PLAN.md (self-contained checkpoint + architecture detection)
 Resume file: None

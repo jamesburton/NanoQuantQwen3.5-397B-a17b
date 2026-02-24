@@ -17,10 +17,10 @@ Requirements for initial release. Focused on Stage 1 pipeline with progressive m
 
 ### MoE Support
 
-- [ ] **MOE-01**: WeightView abstraction handles OLMoE-1B-7B expert tensor layout
-- [ ] **MOE-02**: WeightView abstraction handles Qwen MoE expert tensor layout (Qwen1.5-MoE, Qwen2-MoE, Qwen3.5-MoE)
-- [ ] **MOE-03**: Shared attention/embedding layers quantized alongside expert layers
-- [ ] **MOE-04**: Expert-aware block grouping for reconstruction (experts in same block processed together)
+- [x] **MOE-01**: WeightView abstraction handles OLMoE-1B-7B expert tensor layout
+- [x] **MOE-02**: WeightView abstraction handles Qwen MoE expert tensor layout (Qwen1.5-MoE, Qwen2-MoE, Qwen3.5-MoE)
+- [x] **MOE-03**: Shared attention/embedding layers quantized alongside expert layers
+- [x] **MOE-04**: Expert-aware block grouping for reconstruction (experts in same block processed together)
 
 ### Model Scaling
 
@@ -73,10 +73,10 @@ Requirements for initial release. Focused on Stage 1 pipeline with progressive m
 | PIPE-03 | Phase 1 | Complete |
 | PIPE-04 | Phase 1 | Complete |
 | PIPE-05 | Phase 1 | Complete |
-| MOE-01 | Phase 2 | Pending |
-| MOE-02 | Phase 2 | Pending |
-| MOE-03 | Phase 2 | Pending |
-| MOE-04 | Phase 2 | Pending |
+| MOE-01 | Phase 2 | Complete |
+| MOE-02 | Phase 2 | Complete |
+| MOE-03 | Phase 2 | Complete |
+| MOE-04 | Phase 2 | Complete |
 | SCALE-01 | Phase 3 | Pending |
 | SCALE-02 | Phase 3 | Pending |
 | SCALE-03 | Phase 3 | Pending |
