@@ -37,7 +37,11 @@ Plans:
   2. WeightView correctly maps Qwen1.5-MoE, Qwen2-MoE, and Qwen3.5-MoE expert tensor layouts
   3. Shared attention and embedding layers are included in the quantized checkpoint alongside expert layers
   4. All experts within the same transformer block are processed together in a single reconstruction group
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 02-01-PLAN.md — FUSED_EXPERT_CLASSES dispatch table for OLMoE + Qwen variant WeightView support
+- [ ] 02-02-PLAN.md — Self-contained checkpoint (shared layers as FP16) + architecture auto-detection
 
 ### Phase 3: Scaling and Evaluation
 **Goal**: Pipeline is verified on four model sizes (OLMoE-1B → Qwen1.5-3B → Qwen2-57B → Qwen3.5-397B) and perplexity baselines are documented for each
@@ -56,5 +60,5 @@ Plans:
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Pipeline Foundation | 3/3 | Complete   | 2026-02-23 |
-| 2. MoE Support | 0/TBD | Not started | - |
+| 2. MoE Support | 0/2 | Planned | - |
 | 3. Scaling and Evaluation | 0/TBD | Not started | - |
