@@ -11,7 +11,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
 
 from nanoquant.hessian import capture_hessians, robust_diagonal
-from nanoquant.reconstruct import reconstruct_block
+from nanoquant.reconstruct import reconstruct_block, set_rotary_emb, _call_block
 from nanoquant.refine import tune_scales_kd
 from nanoquant.hardware import probe_hardware, print_hardware_summary
 from nanoquant.checkpoint import save_quantized_checkpoint
@@ -122,6 +122,11 @@ def quantize_model(
     model.eval()
     print(f"Model loaded on CPU")
 
+    # Provide model-level rotary embedding to reconstruct_block
+    inner = getattr(model, "model", model)
+    if hasattr(inner, "rotary_emb"):
+        set_rotary_emb(inner.rotary_emb)
+
     # Apply bits_per_weight -> rank override before block loop
     if bits_per_weight is not None:
         # bpw ≈ rank * (d_out + d_in) / (d_out * d_in)
@@ -179,8 +184,23 @@ def quantize_model(
         block_input = embed(cal_subset).to(model_dtype)  # (8, seq_len, hidden)
     embed.cpu()
 
+    # Pre-compute rotary embeddings on the compute device for block calls
+    _rotary_emb_mod = None
+    inner = getattr(model, "model", model)
+    if hasattr(inner, "rotary_emb"):
+        _rotary_emb_mod = inner.rotary_emb
+
     def _run_block(blk, x):
-        """Run a block, handling optional kwargs. Returns model_dtype tensor."""
+        """Run a block with position_embeddings for Qwen2-style models."""
+        if _rotary_emb_mod is not None:
+            bsz = x.shape[0]
+            seq = x.shape[1] if x.dim() == 3 else 1
+            dev = x.device
+            pos_ids = torch.arange(seq, device=dev).unsqueeze(0).expand(bsz, -1)
+            _rotary_emb_mod.to(dev)
+            with torch.no_grad():
+                cos, sin = _rotary_emb_mod(x, pos_ids)
+            return blk(x, position_embeddings=(cos, sin))[0]
         try:
             return blk(x)[0]
         except TypeError:
