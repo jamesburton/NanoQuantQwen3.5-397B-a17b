@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Consumer-friendly sub-1-bit quantization of MoE models via NanoQuant's ADMM-based pipeline
-**Current focus:** Phase 2 - MoE Support
+**Current focus:** Phase 3 - Scaling and Evaluation
 
 ## Current Position
 
-Phase: 2 of 3 (MoE Support)
-Plan: 2 of 5 in current phase
+Phase: 3 of 3 (Scaling and Evaluation)
+Plan: 1 of 3 in current phase
 Status: In Progress
-Last activity: 2026-02-24 — Completed plan 02-02 (self-contained checkpoint + architecture detection)
+Last activity: 2026-02-25 — Completed plan 03-01 (evaluation infrastructure)
 
-Progress: [████░░░░░░] 40%
+Progress: [███████░░░] 70%
 
 ## Performance Metrics
 
@@ -33,6 +33,7 @@ Progress: [████░░░░░░] 40%
 | Phase 01-pipeline-foundation P03 | 2 | 1 tasks | 2 files |
 | Phase 02-moe-support P01 | 5 | 1 tasks | 1 files |
 | Phase 02-moe-support P02 | 10 | 2 tasks | 3 files |
+| Phase 03 P01 | 2 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -48,6 +49,8 @@ Progress: [████░░░░░░] 40%
 - [Phase 02-moe-support]: Use frozenset dispatch table (FUSED_EXPERT_CLASSES) for fused expert module type matching — enables adding new architectures by updating one set
 - [Phase 02-moe-support P02]: shared. prefix chosen for norm/embedding keys to distinguish from binary factor dotted keys in safetensors
 - [Phase 02-moe-support P02]: collect_shared_layers uses named_modules traversal with class-name check to stay architecture-agnostic
+- [Phase 03]: evaluate_perplexity returns dict (ppl, n_tokens, settings) for structured downstream consumption
+- [Phase 03]: dtype=auto default for baseline eval respects model native dtype (e.g. bfloat16 for Qwen3.5-397B)
 
 ### Pending Todos
 
@@ -59,6 +62,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-24
-Stopped at: Completed 02-02-PLAN.md (self-contained checkpoint + architecture detection)
+Last session: 2026-02-25
+Stopped at: Completed 03-01-PLAN.md (evaluation infrastructure)
 Resume file: None

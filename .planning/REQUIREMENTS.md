@@ -31,9 +31,9 @@ Requirements for initial release. Focused on Stage 1 pipeline with progressive m
 
 ### Evaluation
 
-- [ ] **EVAL-01**: Perplexity evaluation on WikiText-2 for quantized models
-- [ ] **EVAL-02**: Comparison baseline: FP16 perplexity for each model
-- [ ] **EVAL-03**: Memory footprint reporting (model size before/after, peak VRAM usage)
+- [x] **EVAL-01**: Perplexity evaluation on WikiText-2 for quantized models
+- [x] **EVAL-02**: Comparison baseline: FP16 perplexity for each model
+- [x] **EVAL-03**: Memory footprint reporting (model size before/after, peak VRAM usage)
 
 ## v2 Requirements
 
@@ -81,9 +81,9 @@ Requirements for initial release. Focused on Stage 1 pipeline with progressive m
 | SCALE-02 | Phase 3 | Pending |
 | SCALE-03 | Phase 3 | Pending |
 | SCALE-04 | Phase 3 | Pending |
-| EVAL-01 | Phase 3 | Pending |
-| EVAL-02 | Phase 3 | Pending |
-| EVAL-03 | Phase 3 | Pending |
+| EVAL-01 | Phase 3 | Complete |
+| EVAL-02 | Phase 3 | Complete |
+| EVAL-03 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 16 total
