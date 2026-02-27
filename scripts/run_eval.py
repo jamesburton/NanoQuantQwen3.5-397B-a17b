@@ -31,15 +31,45 @@ def is_factors_dir(path: str) -> bool:
     )
 
 
-def get_model_disk_size_gb(model_dir: str) -> float:
-    """Sum size of all model weight files in a directory."""
-    if not os.path.isdir(model_dir):
-        return 0.0
-    total = 0
-    for fname in os.listdir(model_dir):
-        if fname.endswith((".safetensors", ".bin")):
-            total += os.path.getsize(os.path.join(model_dir, fname))
-    return total / 1024**3
+def get_model_disk_size_gb(model_name_or_path: str) -> float:
+    """Sum size of all model weight files, resolving HF cache if needed."""
+    # If it's a local directory, scan directly
+    if os.path.isdir(model_name_or_path):
+        total = 0
+        for fname in os.listdir(model_name_or_path):
+            if fname.endswith((".safetensors", ".bin")):
+                total += os.path.getsize(os.path.join(model_name_or_path, fname))
+        return total / 1024**3
+
+    # Try resolving from HF cache via huggingface_hub
+    try:
+        from huggingface_hub import scan_cache_dir, model_info
+
+        # First try local cache
+        cache = scan_cache_dir()
+        for repo in cache.repos:
+            if repo.repo_id == model_name_or_path:
+                # Sum weight files in the latest revision
+                for revision in repo.revisions:
+                    total = sum(
+                        f.size_on_disk for f in revision.files
+                        if f.file_name.endswith((".safetensors", ".bin"))
+                    )
+                    if total > 0:
+                        return total / 1024**3
+
+        # Fallback: query HF API for model size
+        info = model_info(model_name_or_path)
+        if hasattr(info, "safetensors") and info.safetensors:
+            # safetensors metadata contains parameter counts per dtype
+            param_counts = info.safetensors.get("total", 0) if isinstance(info.safetensors, dict) else 0
+            if param_counts > 0:
+                return (param_counts * 2) / 1024**3  # assume FP16
+
+    except Exception:
+        pass
+
+    return 0.0
 
 
 def get_quantized_disk_size_gb(checkpoint_dir: str) -> float:
