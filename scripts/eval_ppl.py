@@ -38,7 +38,7 @@ def evaluate_perplexity(
     # This offloads layers to CPU when the model doesn't fit entirely in VRAM.
     max_memory = None
     if device == "cuda" and torch.cuda.is_available():
-        total_vram = torch.cuda.get_device_properties(0).total_mem / 1024**3
+        total_vram = torch.cuda.get_device_properties(0).total_memory / 1024**3
         # Reserve 1 GB for activations/KV cache
         max_memory = {0: f"{total_vram - 1:.0f}GiB", "cpu": "48GiB"}
         device_map = "auto"
