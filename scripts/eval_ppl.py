@@ -33,11 +33,24 @@ def evaluate_perplexity(
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
 
     torch_dtype = dtype if dtype == "auto" else getattr(torch, dtype)
+
+    # Use device_map="auto" with max_memory to stay within consumer GPU limits.
+    # This offloads layers to CPU when the model doesn't fit entirely in VRAM.
+    max_memory = None
+    if device == "cuda" and torch.cuda.is_available():
+        total_vram = torch.cuda.get_device_properties(0).total_mem / 1024**3
+        # Reserve 1 GB for activations/KV cache
+        max_memory = {0: f"{total_vram - 1:.0f}GiB", "cpu": "48GiB"}
+        device_map = "auto"
+    else:
+        device_map = device
+
     model = AutoModelForCausalLM.from_pretrained(
         model_path,
         torch_dtype=torch_dtype,
         trust_remote_code=True,
-        device_map=device,
+        device_map=device_map,
+        max_memory=max_memory,
     )
     model.eval()
 
@@ -58,7 +71,8 @@ def evaluate_perplexity(
         for begin_loc in range(0, seq_len, stride):
             end_loc = min(begin_loc + max_length, seq_len)
             trg_len = end_loc - prev_end_loc
-            input_ids_window = input_ids[:, begin_loc:end_loc].to(device)
+            input_device = model.device if hasattr(model, "device") else device
+            input_ids_window = input_ids[:, begin_loc:end_loc].to(input_device)
             target_ids = input_ids_window.clone()
             target_ids[:, :-trg_len] = -100  # mask context tokens
 
