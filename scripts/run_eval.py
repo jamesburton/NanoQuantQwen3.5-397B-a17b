@@ -17,6 +17,20 @@ from scripts.eval_ppl import evaluate_perplexity
 from scripts.build_summary import rebuild_summary
 
 
+def is_hf_model_dir(path: str) -> bool:
+    """Check if a directory contains a loadable HF model (has config.json)."""
+    return os.path.isdir(path) and os.path.exists(os.path.join(path, "config.json"))
+
+
+def is_factors_dir(path: str) -> bool:
+    """Check if a directory contains raw NanoQuant factors (no config.json)."""
+    return (
+        os.path.isdir(path)
+        and os.path.exists(os.path.join(path, "quantized_factors.safetensors"))
+        and not os.path.exists(os.path.join(path, "config.json"))
+    )
+
+
 def get_model_disk_size_gb(model_dir: str) -> float:
     """Sum size of all model weight files in a directory."""
     if not os.path.isdir(model_dir):
@@ -93,23 +107,57 @@ def main():
         baseline_ppl = None
     baseline_time = time.time() - t0
 
+    # --- Resolve quantized model path ---
+    quantized_model_path = args.quantized_dir
+    if is_factors_dir(args.quantized_dir):
+        # Raw factors — need reconstruction first
+        reconstructed_dir = args.quantized_dir.rstrip("/\\") + "_reconstructed"
+        if is_hf_model_dir(reconstructed_dir):
+            print(f"Using existing reconstructed model at {reconstructed_dir}")
+            quantized_model_path = reconstructed_dir
+        else:
+            print(f"Raw factors detected in {args.quantized_dir} — reconstructing HF model...")
+            import subprocess
+            ret = subprocess.run(
+                [
+                    sys.executable, "-m", "scripts.reconstruct_model",
+                    "--model", args.model,
+                    "--quantized-dir", args.quantized_dir,
+                    "--output", reconstructed_dir,
+                ],
+                capture_output=False,
+            )
+            if ret.returncode != 0:
+                print("ERROR: Reconstruction failed")
+                quantized_model_path = None
+            else:
+                quantized_model_path = reconstructed_dir
+    elif not is_hf_model_dir(args.quantized_dir):
+        print(f"WARNING: {args.quantized_dir} is neither a HF model dir nor a factors dir")
+        quantized_model_path = None
+
     # --- Quantized PPL ---
     print("\n--- Quantized Perplexity ---")
     t0 = time.time()
-    try:
-        quantized_result = evaluate_perplexity(
-            args.quantized_dir,
-            device=args.device,
-            max_length=args.max_length,
-            stride=args.stride,
-            dtype="float16",
-        )
-        quantized_ppl = quantized_result["ppl"]
-    except Exception as e:
-        print(f"ERROR: Quantized eval failed: {e}")
-        print("Continuing with quantized_ppl=None")
+    if quantized_model_path is None:
+        print("Skipping quantized eval — no loadable model available")
         quantized_result = None
         quantized_ppl = None
+    else:
+        try:
+            quantized_result = evaluate_perplexity(
+                quantized_model_path,
+                device=args.device,
+                max_length=args.max_length,
+                stride=args.stride,
+                dtype="float16",
+            )
+            quantized_ppl = quantized_result["ppl"]
+        except Exception as e:
+            print(f"ERROR: Quantized eval failed: {e}")
+            print("Continuing with quantized_ppl=None")
+            quantized_result = None
+            quantized_ppl = None
     quantized_time = time.time() - t0
 
     # --- Memory metrics ---
@@ -128,7 +176,7 @@ def main():
 
     # --- Model size metrics ---
     fp16_gb = get_model_disk_size_gb(args.model)
-    quantized_gb = get_quantized_disk_size_gb(args.quantized_dir)
+    quantized_gb = get_quantized_disk_size_gb(quantized_model_path or args.quantized_dir)
     compression_ratio = fp16_gb / quantized_gb if quantized_gb > 0 else None
 
     # --- Quantization config ---
