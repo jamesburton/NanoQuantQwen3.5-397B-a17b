@@ -1,7 +1,7 @@
 """MoE-specific utilities for NanoQuant.
 
 Handles both nn.Linear and fused 3D expert tensors (OlmoeExperts,
-Qwen2MoeExperts, Qwen3MoeExperts, Qwen3_5MoeExperts).
+Qwen2MoeExperts, Qwen3MoeExperts, Qwen3_5MoeExperts, PhimoeExperts).
 """
 
 import torch
@@ -12,12 +12,23 @@ from typing import Iterator, Tuple, Callable, Optional
 # All known fused-expert MoE module classes.
 # Each stores gate_up_proj and down_proj as 3D nn.Parameter [n_experts, out, in].
 # Source: HuggingFace transformers modeling files (verified 2026-02-24).
-FUSED_EXPERT_CLASSES = frozenset({
-    "Qwen2MoeExperts",    # Qwen1.5-MoE, Qwen2-MoE  (model_type: qwen2_moe)
-    "Qwen3MoeExperts",    # Qwen3-MoE                (model_type: qwen3_moe)
-    "Qwen3_5MoeExperts",  # Qwen3.5-MoE              (model_type: qwen3_5_moe)
-    "OlmoeExperts",       # OLMoE-1B-7B              (model_type: olmoe)
-})
+#
+# Dict structure:
+#   key   -> class name (str)
+#   value -> layout metadata dict:
+#     needs_split (bool): if True, gate_up_proj is a fused 3D tensor whose
+#                         per-expert slice must be split into separate gate_proj
+#                         and up_proj WeightViews before quantization.
+#     split_dim   (int, optional): the axis of the 2D per-expert slice [out, in]
+#                                  along which to split (0 = split out-dim in half).
+#                                  Only required when needs_split=True.
+FUSED_EXPERT_CLASSES = {
+    "Qwen2MoeExperts":   {"needs_split": False},   # Qwen1.5-MoE, Qwen2-MoE  (model_type: qwen2_moe)
+    "Qwen3MoeExperts":   {"needs_split": False},   # Qwen3-MoE                (model_type: qwen3_moe)
+    "Qwen3_5MoeExperts": {"needs_split": False},   # Qwen3.5-MoE              (model_type: qwen3_5_moe)
+    "OlmoeExperts":      {"needs_split": False},   # OLMoE-1B-7B              (model_type: olmoe)
+    "PhimoeExperts":     {"needs_split": True, "split_dim": 0},  # Phi-3.5-MoE (model_type: phimoe)
+}
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +100,8 @@ def get_weight_views(block: nn.Module, block_prefix: str = "") -> Iterator[Weigh
       - Fused expert 3D tensors (gate_up_proj, down_proj) for all classes in
         FUSED_EXPERT_CLASSES: OlmoeExperts, Qwen2MoeExperts, Qwen3MoeExperts,
         Qwen3_5MoeExperts — one view per expert
+      - PhimoeExperts: gate_up_proj is split into separate gate_proj[i] and
+        up_proj[i] WeightViews per expert (needs_split=True layout)
     Skips router/gate scalars.
     """
     for mod_name, module in block.named_modules():
@@ -97,29 +110,63 @@ def get_weight_views(block: nn.Module, block_prefix: str = "") -> Iterator[Weigh
         # --- Fused expert tensors (any class in FUSED_EXPERT_CLASSES) ---
         type_name = type(module).__name__
         if type_name in FUSED_EXPERT_CLASSES:
+            layout = FUSED_EXPERT_CLASSES[type_name]
             for param_name in ("gate_up_proj", "down_proj"):
                 param = getattr(module, param_name, None)
                 if param is None or not isinstance(param, nn.Parameter):
                     continue
                 # shape: (n_experts, out_dim, in_dim)
                 n_experts = param.shape[0]
-                for expert_idx in range(n_experts):
-                    w_name = f"{mod_name}.{param_name}[{expert_idx}]"
-                    weight_slice = param.data[expert_idx].float()  # (out, in)
-                    orig_dtype = param.dtype
+                orig_dtype = param.dtype
 
-                    # Closure: capture param and expert_idx by value
-                    def make_write(p, idx):
+                needs_split = layout.get("needs_split", False) and param_name == "gate_up_proj"
+
+                if needs_split:
+                    # gate_up_proj out_dim = 2 * intermediate; split along dim 1 (out-dim of 2D slice)
+                    half = param.shape[1] // 2
+
+                    def make_gate_write(p, idx, h):
                         def _write(W_new: torch.Tensor):
-                            p.data[idx] = W_new.to(p.dtype)
+                            p.data[idx, :h, :] = W_new.to(p.dtype)
                         return _write
 
-                    yield WeightView(
-                        name=w_name,
-                        weight=weight_slice,
-                        write_back=make_write(param, expert_idx),
-                        orig_dtype=orig_dtype,
-                    )
+                    def make_up_write(p, idx, h):
+                        def _write(W_new: torch.Tensor):
+                            p.data[idx, h:, :] = W_new.to(p.dtype)
+                        return _write
+
+                    for expert_idx in range(n_experts):
+                        # gate_proj view
+                        yield WeightView(
+                            name=f"{mod_name}.gate_proj[{expert_idx}]",
+                            weight=param.data[expert_idx, :half, :].float(),
+                            write_back=make_gate_write(param, expert_idx, half),
+                            orig_dtype=orig_dtype,
+                        )
+                        # up_proj view
+                        yield WeightView(
+                            name=f"{mod_name}.up_proj[{expert_idx}]",
+                            weight=param.data[expert_idx, half:, :].float(),
+                            write_back=make_up_write(param, expert_idx, half),
+                            orig_dtype=orig_dtype,
+                        )
+                else:
+                    for expert_idx in range(n_experts):
+                        w_name = f"{mod_name}.{param_name}[{expert_idx}]"
+                        weight_slice = param.data[expert_idx].float()  # (out, in)
+
+                        # Closure: capture param and expert_idx by value
+                        def make_write(p, idx):
+                            def _write(W_new: torch.Tensor):
+                                p.data[idx] = W_new.to(p.dtype)
+                            return _write
+
+                        yield WeightView(
+                            name=w_name,
+                            weight=weight_slice,
+                            write_back=make_write(param, expert_idx),
+                            orig_dtype=orig_dtype,
+                        )
             continue  # don't recurse into fused expert module children
 
         # --- Standard nn.Linear ---
@@ -170,9 +217,24 @@ def get_hessian_key(wv: WeightView, block_prefix: str) -> str:
     Works for all classes in FUSED_EXPERT_CLASSES.
     """
     name = wv.name
-    # Strip expert index suffix for hessian lookup: "mlp.experts.gate_up_proj[3]" -> "mlp.experts"
+    # Strip expert index suffix for hessian lookup:
+    #   "mlp.experts.gate_up_proj[3]"  -> "mlp.experts"  (non-split fused)
+    #   "mlp.experts.down_proj[3]"     -> "mlp.experts"  (non-split fused)
+    #   "mlp.experts.gate_proj[3]"     -> "mlp.experts"  (split view: PhimoeExperts)
+    #   "mlp.experts.up_proj[3]"       -> "mlp.experts"  (split view: PhimoeExperts)
     if "[" in name:
-        base = name[: name.index(".gate_up_proj")] if ".gate_up_proj" in name else name[: name.index(".down_proj")]
+        if ".gate_up_proj" in name:
+            base = name[: name.index(".gate_up_proj")]
+        elif ".down_proj" in name:
+            base = name[: name.index(".down_proj")]
+        elif ".gate_proj" in name:
+            # Split view from needs_split=True layout (e.g. PhimoeExperts)
+            base = name[: name.index(".gate_proj")]
+        elif ".up_proj" in name:
+            # Split view from needs_split=True layout (e.g. PhimoeExperts)
+            base = name[: name.index(".up_proj")]
+        else:
+            base = name[: name.index("[")]
         key = f"{block_prefix}.{base}" if block_prefix else base
     else:
         key = f"{block_prefix}.{name}" if block_prefix else name
