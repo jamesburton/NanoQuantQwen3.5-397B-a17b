@@ -22,6 +22,12 @@ Requirements for initial release. Focused on Stage 1 pipeline with progressive m
 - [x] **MOE-03**: Shared attention/embedding layers quantized alongside expert layers
 - [x] **MOE-04**: Expert-aware block grouping for reconstruction (experts in same block processed together)
 
+### Phi MoE Architecture
+
+- [x] **PHI-01**: PhimoeExperts added to FUSED_EXPERT_CLASSES with weight views handling fused gate_up_proj (2*intermediate) layout
+- [ ] **PHI-02**: Phi-tiny-MoE-instruct (3.8B) quantizes end-to-end on a 12GB consumer GPU producing a valid checkpoint
+- [ ] **PHI-03**: WikiText-2 perplexity measured for FP16 baseline and quantized Phi-tiny-MoE
+
 ### Model Scaling
 
 - [ ] **SCALE-01**: Verified working on OLMoE-1B-7B-0924 (smallest, consumer GPU validation)
@@ -85,9 +91,13 @@ Requirements for initial release. Focused on Stage 1 pipeline with progressive m
 | EVAL-02 | Phase 3 | Complete |
 | EVAL-03 | Phase 3 | Complete |
 
+| PHI-01 | Phase 4 | Complete |
+| PHI-02 | Phase 4 | Pending |
+| PHI-03 | Phase 4 | Pending |
+
 **Coverage:**
-- v1 requirements: 16 total
-- Mapped to phases: 16
+- v1 requirements: 19 total
+- Mapped to phases: 19
 - Unmapped: 0 ✓
 
 ---

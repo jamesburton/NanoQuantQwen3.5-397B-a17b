@@ -9,6 +9,7 @@ Build a consumer-friendly Stage 1 NanoQuant pipeline for MoE models, starting fr
 - [x] **Phase 1: Pipeline Foundation** - Stage 1 runs end-to-end within 12GB VRAM on a single model (completed 2026-02-23)
 - [x] **Phase 2: MoE Support** - WeightView abstractions handle OLMoE and Qwen expert tensor layouts (completed 2026-02-24)
 - [ ] **Phase 3: Scaling and Evaluation** - Progressive validation across four model sizes with PPL baselines
+- [ ] **Phase 4: Phi MoE Support** - Add PhimoeExperts fused gate_up layout + validate with Phi-tiny-MoE-instruct
 
 ## Phase Details
 
@@ -67,3 +68,18 @@ Plans:
 | 1. Pipeline Foundation | 3/3 | Complete   | 2026-02-23 |
 | 2. MoE Support | 2/2 | Complete   | 2026-02-24 |
 | 3. Scaling and Evaluation | 0/3 | Not started | - |
+| 4. Phi MoE Support | 1/2 | In Progress|  |
+
+### Phase 4: Phi MoE Support
+**Goal**: Add PhimoeExperts support (fused gate_up_proj 2x layout) and validate pipeline end-to-end with Phi-tiny-MoE-instruct (3.8B total, 1.1B active) on local GPU
+**Depends on**: Phase 2
+**Requirements**: PHI-01, PHI-02, PHI-03
+**Success Criteria** (what must be TRUE):
+  1. PhimoeExperts added to FUSED_EXPERT_CLASSES and weight views handle the fused gate_up_proj (2*intermediate) layout
+  2. Phi-tiny-MoE-instruct quantizes end-to-end on a 12GB consumer GPU producing a valid checkpoint
+  3. WikiText-2 perplexity measured for both FP16 baseline and quantized Phi-tiny-MoE
+**Plans**: 2 plans
+
+Plans:
+- [ ] 04-01-PLAN.md — FUSED_EXPERT_CLASSES dict migration + PhimoeExperts fused gate_up_proj split support
+- [ ] 04-02-PLAN.md — Phi-tiny-MoE-instruct end-to-end quantization + WikiText-2 eval
