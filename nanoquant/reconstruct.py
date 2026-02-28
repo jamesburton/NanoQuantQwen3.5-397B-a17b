@@ -18,15 +18,27 @@ def set_rotary_emb(rotary_emb):
     _rotary_emb_cache = rotary_emb
 
 
+def _unwrap(result):
+    """Extract hidden_states from a block output (tuple or bare tensor)."""
+    if isinstance(result, torch.Tensor):
+        return result
+    return result[0]
+
+
 def _call_block(block, inputs):
-    """Call a transformer block, handling models that require position_embeddings."""
+    """Call a transformer block, handling models that require position_embeddings.
+
+    Handles two return conventions:
+      - Older transformers: returns tuple (hidden_states, ...)
+      - Newer transformers (Qwen2 ≥4.52): returns bare tensor
+    """
     batch, seq_len = inputs.shape[0], inputs.shape[1] if inputs.dim() == 3 else 1
     try:
-        return block(inputs)[0]
+        return _unwrap(block(inputs))
     except TypeError:
         pass
     try:
-        return block(inputs, attention_mask=None)[0]
+        return _unwrap(block(inputs, attention_mask=None))
     except TypeError:
         pass
     # Newer transformers (Qwen2, Llama, etc.) need position_embeddings=(cos, sin)
@@ -44,9 +56,9 @@ def _call_block(block, inputs):
         rotary_device = next(rotary_emb.parameters(), torch.tensor(0, device=device)).device
         with torch.no_grad():
             cos, sin = rotary_emb(inputs.to(rotary_device), position_ids.to(rotary_device))
-        return block(inputs, position_embeddings=(cos.to(device), sin.to(device)))[0]
+        return _unwrap(block(inputs, position_embeddings=(cos.to(device), sin.to(device))))
     # Last resort
-    return block(inputs, position_ids=position_ids)[0]
+    return _unwrap(block(inputs, position_ids=position_ids))
 
 
 def reconstruct_weight(U_bin, V_bin, s1, s2, d_in, d_out) -> torch.Tensor:

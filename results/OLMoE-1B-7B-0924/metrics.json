@@ -1,23 +1,23 @@
 {
   "model": "allenai/OLMoE-1B-7B-0924",
   "model_short_name": "OLMoE-1B-7B-0924",
-  "date": "2026-02-26",
+  "date": "2026-02-27",
   "hardware": {
     "gpu": "NVIDIA GeForce RTX 3060",
-    "peak_vram_gb": 14.56,
-    "peak_ram_gb": 38.63
+    "peak_vram_gb": 0.0,
+    "peak_ram_gb": 34.27
   },
   "model_size": {
-    "fp16_gb": 0.0,
-    "quantized_gb": 23.64,
-    "compression_ratio": null
+    "fp16_gb": 12.89,
+    "quantized_gb": 12.89,
+    "compression_ratio": 1.0
   },
   "timing": {
-    "baseline_eval_seconds": 14489.2,
-    "quantized_eval_seconds": 1.1
+    "baseline_eval_seconds": 12.2,
+    "quantized_eval_seconds": 4.3
   },
   "perplexity": {
-    "fp16_baseline": 6.6182,
+    "fp16_baseline": null,
     "quantized": null,
     "degradation_ratio": null,
     "eval_settings": {

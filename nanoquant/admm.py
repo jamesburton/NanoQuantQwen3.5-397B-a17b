@@ -34,6 +34,23 @@ def svid(P: torch.Tensor, rank: int = 1) -> torch.Tensor:
     return B
 
 
+def _cholesky_solve(A: torch.Tensor, B: torch.Tensor, device, dtype, rank: int) -> torch.Tensor:
+    """Solve X @ A = B via Cholesky with jitter fallback for numerical stability."""
+    for jitter_scale in [0, 1e-6, 1e-5, 1e-4, 1e-3]:
+        try:
+            A_reg = A if jitter_scale == 0 else A + jitter_scale * torch.eye(rank, device=device, dtype=dtype)
+            L = torch.linalg.cholesky(A_reg)
+            return torch.linalg.solve_triangular(
+                L.T,
+                torch.linalg.solve_triangular(L, B.T, upper=False),
+                upper=True,
+            ).T
+        except torch._C._LinAlgError:
+            continue
+    # Final fallback: use least-squares solve
+    return torch.linalg.lstsq(A.T, B.T).solution.T
+
+
 def lb_admm(
     W_target: torch.Tensor,
     rank: int = 8,
@@ -124,23 +141,13 @@ def lb_admm(
         B_u = W @ V_cont + (rho / 2.0) * (U_bin - Lambda_U)
         # Solve U @ A_u = B_u => U = B_u @ A_u^{-1}
         # Equivalent: A_u^T @ U^T = B_u^T
-        L_u = torch.linalg.cholesky(A_u)
-        U_cont = torch.linalg.solve_triangular(
-            L_u.T,
-            torch.linalg.solve_triangular(L_u, B_u.T, upper=False),
-            upper=True,
-        ).T
+        U_cont = _cholesky_solve(A_u, B_u, device, dtype, rank)
 
         # --- V continuous update ---
         UtU = U_cont.T @ U_cont  # (r, r)
         A_v = UtU + (lam + rho / 2.0) * torch.eye(rank, device=device, dtype=dtype)
         B_v = W.T @ U_cont + (rho / 2.0) * (V_bin - Lambda_V)
-        L_v = torch.linalg.cholesky(A_v)
-        V_cont = torch.linalg.solve_triangular(
-            L_v.T,
-            torch.linalg.solve_triangular(L_v, B_v.T, upper=False),
-            upper=True,
-        ).T
+        V_cont = _cholesky_solve(A_v, B_v, device, dtype, rank)
 
         # --- Binary projection via SVID ---
         P_U = U_cont + Lambda_U
