@@ -129,15 +129,59 @@ def main():
     del regular_layers
     gc.collect()
 
-    # Write expert weights: assemble 3D tensor from per-expert 2D slices
+    # Write expert weights: assemble 3D tensor from per-expert 2D slices.
+    #
+    # Two cases:
+    #   (a) Non-split layouts (OlmoeExperts, Qwen*MoeExperts):
+    #       base_name ends with ".gate_up_proj" or ".down_proj" — write directly.
+    #   (b) Split layouts (PhimoeExperts, needs_split=True):
+    #       base_name ends with ".gate_proj" or ".up_proj" — these are the two
+    #       halves of a fused gate_up_proj tensor and must be concatenated along
+    #       dim 0 (out-dim) before writing.  This is the inverse of the split
+    #       performed in moe.py get_weight_views for needs_split=True layouts.
+
+    # First pass: separate split views from normal expert groups.
+    gate_proj_groups = {}  # fused_base -> {idx: W}   (half = first rows)
+    up_proj_groups = {}    # fused_base -> {idx: W}   (half = second rows)
+    normal_expert_groups = {}
+
     for base_name, expert_dict in expert_groups.items():
+        if base_name.endswith(".gate_proj"):
+            fused_base = base_name[: -len(".gate_proj")] + ".gate_up_proj"
+            gate_proj_groups[fused_base] = expert_dict
+        elif base_name.endswith(".up_proj"):
+            fused_base = base_name[: -len(".up_proj")] + ".gate_up_proj"
+            up_proj_groups[fused_base] = expert_dict
+        else:
+            normal_expert_groups[base_name] = expert_dict
+
+    # Write non-split expert groups (gate_up_proj / down_proj slices).
+    for base_name, expert_dict in normal_expert_groups.items():
         if base_name in sd:
             param = sd[base_name]  # (n_experts, out, in)
             for idx, W in expert_dict.items():
                 param[idx].copy_(W)
         else:
             print(f"  WARNING: {base_name} not found in model state_dict")
-    del expert_groups
+
+    # Reassemble split gate_proj + up_proj back into fused gate_up_proj (PhimoeExperts).
+    all_split_bases = set(gate_proj_groups) | set(up_proj_groups)
+    for fused_base in all_split_bases:
+        gate_dict = gate_proj_groups.get(fused_base, {})
+        up_dict = up_proj_groups.get(fused_base, {})
+        if fused_base not in sd:
+            print(f"  WARNING: {fused_base} not found in model state_dict")
+            continue
+        param = sd[fused_base]  # (n_experts, out, in)  out = 2 * intermediate
+        all_idxs = set(gate_dict) | set(up_dict)
+        for idx in all_idxs:
+            if idx not in gate_dict or idx not in up_dict:
+                print(f"  WARNING: incomplete split pair for {fused_base}[{idx}]")
+                continue
+            fused_W = torch.cat([gate_dict[idx], up_dict[idx]], dim=0)  # (out, in)
+            param[idx].copy_(fused_W)
+
+    del expert_groups, normal_expert_groups, gate_proj_groups, up_proj_groups
     gc.collect()
 
     print(f"Reconstructed {reconstructed_count} weight matrices")
