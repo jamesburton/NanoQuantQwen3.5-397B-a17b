@@ -1,7 +1,14 @@
 {
-  "workflow": "gsd-v1",
+  "workflow": {
+    "_auto_chain_active": false
+  },
   "conventions": "standard",
-  "tech_stack": ["python", "pytorch", "transformers", "accelerate"],
+  "tech_stack": [
+    "python",
+    "pytorch",
+    "transformers",
+    "accelerate"
+  ],
   "preferences": {
     "auto_verify": true,
     "parallel_tasks": true,

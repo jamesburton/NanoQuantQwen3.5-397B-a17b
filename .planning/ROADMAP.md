@@ -9,7 +9,7 @@ Build a consumer-friendly Stage 1 NanoQuant pipeline for MoE models, starting fr
 - [x] **Phase 1: Pipeline Foundation** - Stage 1 runs end-to-end within 12GB VRAM on a single model (completed 2026-02-23)
 - [x] **Phase 2: MoE Support** - WeightView abstractions handle OLMoE and Qwen expert tensor layouts (completed 2026-02-24)
 - [ ] **Phase 3: Scaling and Evaluation** - Progressive validation across four model sizes with PPL baselines
-- [ ] **Phase 4: Phi MoE Support** - Add PhimoeExperts fused gate_up layout + validate with Phi-tiny-MoE-instruct
+- [x] **Phase 4: Phi MoE Support** - Add PhimoeExperts fused gate_up layout + validate with Phi-tiny-MoE-instruct (completed 2026-03-08)
 
 ## Phase Details
 
@@ -68,7 +68,7 @@ Plans:
 | 1. Pipeline Foundation | 3/3 | Complete   | 2026-02-23 |
 | 2. MoE Support | 2/2 | Complete   | 2026-02-24 |
 | 3. Scaling and Evaluation | 0/3 | Not started | - |
-| 4. Phi MoE Support | 2/3 | Gap closure in progress | 2026-03-08 |
+| 4. Phi MoE Support | 3/3 | Complete   | 2026-03-08 |
 
 ### Phase 4: Phi MoE Support
 **Goal**: Add PhimoeExperts support (fused gate_up_proj 2x layout) and validate pipeline end-to-end with Phi-tiny-MoE-instruct (3.8B total, 1.1B active) on local GPU
@@ -83,4 +83,4 @@ Plans:
 Plans:
 - [x] 04-01-PLAN.md — FUSED_EXPERT_CLASSES dict migration + PhimoeExperts fused gate_up_proj split support
 - [x] 04-02-PLAN.md — Phi-tiny-MoE-instruct end-to-end quantization + WikiText-2 eval
-- [ ] 04-03-PLAN.md — Gap closure: re-quantize and run WikiText-2 eval for Phi-tiny-MoE-instruct (PHI-03)
+- [x] 04-03-PLAN.md — Gap closure: fix factor key collision + run WikiText-2 eval for Phi-tiny-MoE-instruct (PHI-03)

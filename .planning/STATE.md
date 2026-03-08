@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Consumer-friendly sub-1-bit quantization of MoE models via NanoQuant's ADMM-based pipeline
-**Current focus:** Phase 4 - Phi MoE Support (complete, eval deferred)
+**Current focus:** Phase 4 complete. Next: Phase 3 (Scaling and Evaluation)
 
 ## Current Position
 
 Phase: 4 of 4 (Phi MoE Support)
-Plan: 2 of 2 in current phase (complete)
-Status: Complete (Task 4 eval deferred - requires GPU re-run)
-Last activity: 2026-03-08 — Completed plan 04-02 (Phi-tiny-MoE-instruct quantization, 3/4 tasks, eval deferred)
+Plan: 3 of 3 in current phase (complete)
+Status: Phase 4 complete — all 3 plans done, all verification gaps closed
+Last activity: 2026-03-08 — Completed plan 04-03 (gap closure: factor key fix + WikiText-2 eval)
 
-Progress: [██████████] 95%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -35,6 +35,7 @@ Progress: [██████████] 95%
 | Phase 02-moe-support P02 | 10 | 2 tasks | 3 files |
 | Phase 03 P01 | 2 | 2 tasks | 3 files |
 | Phase 04-phi-moe-support P02 | - | 3 tasks (1 deferred) | 4 files |
+| Phase 04-phi-moe-support P03 | - | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -57,21 +58,25 @@ Progress: [██████████] 95%
 - [Phase 03]: dtype=auto default for baseline eval respects model native dtype (e.g. bfloat16 for Qwen3.5-397B)
 - [Phase 04-phi-moe-support P02]: trust_remote_code=True already present on all from_pretrained calls from 04-01 work — Task 3 was a no-op
 - [Phase 04-phi-moe-support P02]: SlimMoE uses nn.Linear experts (w1,w2,w3), not fused 3D tensors — existing nn.Linear traversal path handles them
+- [Phase 04-phi-moe-support P03]: Factor key collision bug — block-relative keys caused all 32 blocks to overwrite each other; fixed with block_prefix
+- [Phase 04-phi-moe-support P03]: CPU float32 fallback for eval pipeline (float16 matmuls produce NaN on CPU)
 
 ### Roadmap Evolution
 
 - Phase 4 added: Phi MoE Support — PhimoeExperts fused gate_up_proj layout + Phi-tiny-MoE-instruct local validation
+- Phase 4 completed: All 3 plans done, PHI-01/02/03 satisfied
 
 ### Pending Todos
 
-- PHI-03: Run WikiText-2 eval for Phi-tiny-MoE-instruct on GPU machine (see deferred-items.md)
+- None for Phase 4
 
 ### Blockers/Concerns
 
 - SCALE-04 (Qwen3.5-397B) requires cloud GPU — consumer 12GB constraint applies to phases 1-2 and SCALE-01 through SCALE-03 only
+- Phase 4 PPL degradation (141x) is high due to zero-refinement settings; CUDA re-run with defaults expected to improve to ~1.5-3x
 
 ## Session Continuity
 
 Last session: 2026-03-08
-Stopped at: Completed 04-02-PLAN.md (Phi-tiny-MoE-instruct quantization, eval deferred)
+Stopped at: Completed Phase 4 — all plans done, gaps closed, committed
 Resume file: None
