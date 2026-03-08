@@ -62,7 +62,8 @@ def patch_file(path: str) -> bool:
         print(f"  [??] Patch 1: pattern not found (may not need patching)")
 
     # Patch 2: is_torch_fx_available stub
-    OLD2 = "from transformers.utils.import_utils import is_torch_fx_available"
+    # Match the bare import line only (not already wrapped in try/except)
+    OLD2_BARE = "from transformers.utils.import_utils import is_torch_fx_available"
     NEW2 = (
         "try:\n"
         "    from transformers.utils.import_utils import is_torch_fx_available\n"
@@ -70,12 +71,12 @@ def patch_file(path: str) -> bool:
         "    def is_torch_fx_available():\n"
         "        return False"
     )
-    if OLD2 in content:
-        content = content.replace(OLD2, NEW2)
+    if "def is_torch_fx_available():" in content:
+        print(f"  [--] Patch 2: already applied")
+    elif OLD2_BARE in content:
+        content = content.replace(OLD2_BARE, NEW2)
         changed = True
         print(f"  [OK] Patch 2: is_torch_fx_available stub")
-    elif "def is_torch_fx_available():" in content:
-        print(f"  [--] Patch 2: already applied")
     else:
         print(f"  [??] Patch 2: pattern not found")
 
@@ -181,12 +182,12 @@ def patch_file(path: str) -> bool:
         "                else:\n"
         "                    past_key_values = DynamicCache()"
     )
-    if OLD5 in content:
+    if "from_legacy_cache removed in transformers>=5.x" in content:
+        print(f"  [--] Patch 5: already applied")
+    elif OLD5 in content:
         content = content.replace(OLD5, NEW5)
         changed = True
         print(f"  [OK] Patch 5: DynamicCache.from_legacy_cache conditional")
-    elif "from_legacy_cache removed in transformers>=5.x" in content:
-        print(f"  [--] Patch 5: already applied")
     else:
         print(f"  [??] Patch 5: pattern not found")
 
