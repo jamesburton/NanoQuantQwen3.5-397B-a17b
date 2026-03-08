@@ -68,7 +68,7 @@ Plans:
 | 1. Pipeline Foundation | 3/3 | Complete   | 2026-02-23 |
 | 2. MoE Support | 2/2 | Complete   | 2026-02-24 |
 | 3. Scaling and Evaluation | 0/3 | Not started | - |
-| 4. Phi MoE Support | 1/2 | In Progress|  |
+| 4. Phi MoE Support | 2/2 | Complete (eval deferred) | 2026-03-08 |
 
 ### Phase 4: Phi MoE Support
 **Goal**: Add PhimoeExperts support (fused gate_up_proj 2x layout) and validate pipeline end-to-end with Phi-tiny-MoE-instruct (3.8B total, 1.1B active) on local GPU

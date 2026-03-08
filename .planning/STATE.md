@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** Consumer-friendly sub-1-bit quantization of MoE models via NanoQuant's ADMM-based pipeline
-**Current focus:** Phase 3 - Scaling and Evaluation
+**Current focus:** Phase 4 - Phi MoE Support (complete, eval deferred)
 
 ## Current Position
 
 Phase: 4 of 4 (Phi MoE Support)
-Plan: 2 of 2 in current phase
-Status: In Progress
-Last activity: 2026-02-28 — Completed plan 04-01 (PhimoeExperts fused gate_up_proj split support)
+Plan: 2 of 2 in current phase (complete)
+Status: Complete (Task 4 eval deferred - requires GPU re-run)
+Last activity: 2026-03-08 — Completed plan 04-02 (Phi-tiny-MoE-instruct quantization, 3/4 tasks, eval deferred)
 
-Progress: [█████████░] 90%
+Progress: [██████████] 95%
 
 ## Performance Metrics
 
@@ -34,6 +34,7 @@ Progress: [█████████░] 90%
 | Phase 02-moe-support P01 | 5 | 1 tasks | 1 files |
 | Phase 02-moe-support P02 | 10 | 2 tasks | 3 files |
 | Phase 03 P01 | 2 | 2 tasks | 3 files |
+| Phase 04-phi-moe-support P02 | - | 3 tasks (1 deferred) | 4 files |
 
 ## Accumulated Context
 
@@ -54,6 +55,8 @@ Progress: [█████████░] 90%
 - [Phase 02-moe-support P02]: collect_shared_layers uses named_modules traversal with class-name check to stay architecture-agnostic
 - [Phase 03]: evaluate_perplexity returns dict (ppl, n_tokens, settings) for structured downstream consumption
 - [Phase 03]: dtype=auto default for baseline eval respects model native dtype (e.g. bfloat16 for Qwen3.5-397B)
+- [Phase 04-phi-moe-support P02]: trust_remote_code=True already present on all from_pretrained calls from 04-01 work — Task 3 was a no-op
+- [Phase 04-phi-moe-support P02]: SlimMoE uses nn.Linear experts (w1,w2,w3), not fused 3D tensors — existing nn.Linear traversal path handles them
 
 ### Roadmap Evolution
 
@@ -61,7 +64,7 @@ Progress: [█████████░] 90%
 
 ### Pending Todos
 
-None yet.
+- PHI-03: Run WikiText-2 eval for Phi-tiny-MoE-instruct on GPU machine (see deferred-items.md)
 
 ### Blockers/Concerns
 
@@ -69,6 +72,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-28
-Stopped at: Completed 04-01-PLAN.md (PhimoeExperts fused gate_up_proj split support)
+Last session: 2026-03-08
+Stopped at: Completed 04-02-PLAN.md (Phi-tiny-MoE-instruct quantization, eval deferred)
 Resume file: None
