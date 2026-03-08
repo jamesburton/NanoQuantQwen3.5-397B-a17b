@@ -2,6 +2,7 @@
 """Standalone WikiText-2 perplexity evaluator using HuggingFace canonical sliding-window method."""
 
 import argparse
+import time
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from datasets import load_dataset
@@ -66,9 +67,11 @@ def evaluate_perplexity(
     nll_sum = 0.0
     n_tokens = 0
     prev_end_loc = 0
+    n_windows = (seq_len - max_length + stride - 1) // stride + 1
+    t_start = time.time()
 
     with torch.no_grad():
-        for begin_loc in range(0, seq_len, stride):
+        for w_idx, begin_loc in enumerate(range(0, seq_len, stride)):
             end_loc = min(begin_loc + max_length, seq_len)
             trg_len = end_loc - prev_end_loc
             input_device = model.device if hasattr(model, "device") else device
@@ -86,6 +89,13 @@ def evaluate_perplexity(
             num_loss_tokens = num_valid - target_ids.size(0)  # subtract batch_size for shift
             nll_sum += neg_log_likelihood.item() * num_loss_tokens
             n_tokens += num_loss_tokens
+
+            # Progress every 50 windows
+            if (w_idx + 1) % 50 == 0 or w_idx == 0:
+                elapsed = time.time() - t_start
+                eta = elapsed / (w_idx + 1) * (n_windows - w_idx - 1)
+                running_ppl = torch.exp(torch.tensor(nll_sum / n_tokens)).item()
+                print(f"  Window {w_idx+1}/{n_windows} | {elapsed:.0f}s elapsed | ETA {eta:.0f}s | running PPL {running_ppl:.2f}", flush=True)
 
             prev_end_loc = end_loc
             if end_loc == seq_len:
@@ -117,8 +127,8 @@ def main():
         "--dtype",
         type=str,
         default="auto",
-        choices=["auto", "float16"],
-        help="Model dtype: 'auto' (native) or 'float16'",
+        choices=["auto", "float16", "float32"],
+        help="Model dtype: 'auto' (native), 'float16', or 'float32' (required for CPU)",
     )
     args = parser.parse_args()
 

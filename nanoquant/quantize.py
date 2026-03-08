@@ -251,9 +251,10 @@ def quantize_model(
             block, bi, block_hessians, cfg, block_prefix=block_prefix
         )
 
-        # Collect binary factors from this block
+        # Collect binary factors from this block (prefix with block path for uniqueness)
         for layer_name, factors in quantized.items():
-            all_quantized[layer_name] = factors
+            full_key = f"{block_prefix}.{layer_name}"
+            all_quantized[full_key] = factors
 
         # Compute output for next block using quantized weights (keep model_dtype)
         with torch.no_grad():

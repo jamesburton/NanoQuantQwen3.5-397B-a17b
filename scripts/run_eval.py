@@ -23,11 +23,15 @@ def is_hf_model_dir(path: str) -> bool:
 
 
 def is_factors_dir(path: str) -> bool:
-    """Check if a directory contains raw NanoQuant factors (no config.json)."""
+    """Check if a directory contains raw NanoQuant factors (needs reconstruction).
+
+    Prioritizes factors detection over config.json presence — the quantization
+    output dir may contain both config.json (for reconstruction metadata) and
+    quantized_factors.safetensors.
+    """
     return (
         os.path.isdir(path)
         and os.path.exists(os.path.join(path, "quantized_factors.safetensors"))
-        and not os.path.exists(os.path.join(path, "config.json"))
     )
 
 
@@ -122,12 +126,15 @@ def main():
     print("--- FP16 Baseline Perplexity ---")
     t0 = time.time()
     try:
+        # Use float32 on CPU to avoid NaN from float16 matmuls;
+        # "auto" (native dtype, usually float16) on CUDA.
+        baseline_dtype = "auto" if args.device == "cuda" else "float32"
         baseline_result = evaluate_perplexity(
             args.model,
             device=args.device,
             max_length=args.max_length,
             stride=args.stride,
-            dtype="auto",
+            dtype=baseline_dtype,
         )
         baseline_ppl = baseline_result["ppl"]
     except Exception as e:
@@ -175,12 +182,15 @@ def main():
         quantized_ppl = None
     else:
         try:
+            # Use float32 on CPU (float16 matmuls produce NaN on CPU);
+            # keep float16 on CUDA for realistic memory measurement.
+            quant_dtype = "float16" if args.device == "cuda" else "float32"
             quantized_result = evaluate_perplexity(
                 quantized_model_path,
                 device=args.device,
                 max_length=args.max_length,
                 stride=args.stride,
-                dtype="float16",
+                dtype=quant_dtype,
             )
             quantized_ppl = quantized_result["ppl"]
         except Exception as e:
