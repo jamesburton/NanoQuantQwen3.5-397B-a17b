@@ -26,7 +26,7 @@ Requirements for initial release. Focused on Stage 1 pipeline with progressive m
 
 - [x] **PHI-01**: PhimoeExperts added to FUSED_EXPERT_CLASSES with weight views handling fused gate_up_proj (2*intermediate) layout
 - [x] **PHI-02**: Phi-tiny-MoE-instruct (3.8B) quantizes end-to-end on a 12GB consumer GPU producing a valid checkpoint
-- [ ] **PHI-03**: WikiText-2 perplexity measured for FP16 baseline and quantized Phi-tiny-MoE
+- [x] **PHI-03**: WikiText-2 perplexity measured for FP16 baseline and quantized Phi-tiny-MoE
 
 ### Model Scaling
 
@@ -93,7 +93,7 @@ Requirements for initial release. Focused on Stage 1 pipeline with progressive m
 
 | PHI-01 | Phase 4 | Complete |
 | PHI-02 | Phase 4 | Complete |
-| PHI-03 | Phase 4 | Pending |
+| PHI-03 | Phase 4 | Complete |
 
 **Coverage:**
 - v1 requirements: 19 total
