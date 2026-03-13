@@ -4,6 +4,37 @@ import torch
 from typing import Tuple
 
 
+def _clamp_signed_scales(scales: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    """Preserve sign while keeping scale magnitudes away from zero."""
+    scales = scales.float()
+    sign = torch.sign(scales)
+    sign[sign == 0] = 1.0
+    return sign * torch.clamp(scales.abs(), min=eps)
+
+
+def _fit_balanced_scales(
+    W_target: torch.Tensor,
+    U_bin: torch.Tensor,
+    V_bin: torch.Tensor,
+    n_iters: int = 8,
+    eps: float = 1e-8,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Fit row/column scales to the signed target using fixed binary factors."""
+    core = U_bin.float() @ V_bin.float().T
+    target = W_target.float()
+
+    s1 = torch.ones(target.shape[0], device=target.device, dtype=target.dtype)
+    s2 = torch.ones(target.shape[1], device=target.device, dtype=target.dtype)
+
+    for _ in range(n_iters):
+        row_basis = core * s2.unsqueeze(0)
+        s1 = (target * row_basis).sum(dim=1) / (row_basis.pow(2).sum(dim=1) + eps)
+
+        col_basis = core * s1.unsqueeze(1)
+        s2 = (target * col_basis).sum(dim=0) / (col_basis.pow(2).sum(dim=0) + eps)
+
+    return s1, s2
+
 def svid(P: torch.Tensor, rank: int = 1) -> torch.Tensor:
     """Sign-Value Independent Decomposition.
 
@@ -169,17 +200,12 @@ def lb_admm(
         prev_obj = obj
 
     # --- Magnitude balancing ---
-    u_norm = U_bin.float().norm()
-    v_norm = V_bin.float().norm()
-    eta = (v_norm / (u_norm + 1e-12)).sqrt()
+    # Fit positive row/column scales against the target matrix instead of
+    # deriving them only from binary factor norms.
+    s1, s2 = _fit_balanced_scales(W, U_bin, V_bin, eps=eps)
 
-    # s1_i = mean(|eta * u_i|) for each row i
-    s1 = (eta * U_bin.float()).abs().mean(dim=1)  # (m,)
-    # s2_j = mean(|eta^{-1} * v_j|) for each row j of V
-    s2 = (V_bin.float() / (eta + 1e-12)).abs().mean(dim=1)  # (n,)
-
-    # Clamp scales to avoid degenerate values
-    s1 = torch.clamp(s1, min=1e-8)
-    s2 = torch.clamp(s2, min=1e-8)
+    # Clamp magnitudes without destroying the fitted sign pattern.
+    s1 = _clamp_signed_scales(s1, eps=1e-8)
+    s2 = _clamp_signed_scales(s2, eps=1e-8)
 
     return U_bin, V_bin, s1, s2

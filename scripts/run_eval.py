@@ -77,9 +77,18 @@ def get_model_disk_size_gb(model_name_or_path: str) -> float:
 
 
 def get_quantized_disk_size_gb(checkpoint_dir: str) -> float:
-    """Sum size of all quantized weight files."""
+    """Measure the quantized artifact size, preferring raw factor checkpoints."""
     if not os.path.isdir(checkpoint_dir):
         return 0.0
+
+    factors_path = os.path.join(checkpoint_dir, "quantized_factors.safetensors")
+    if os.path.exists(factors_path):
+        total = os.path.getsize(factors_path)
+        manifest_path = os.path.join(checkpoint_dir, "quantized_manifest.json")
+        if os.path.exists(manifest_path):
+            total += os.path.getsize(manifest_path)
+        return total / 1024**3
+
     total = 0
     for fname in os.listdir(checkpoint_dir):
         if fname.endswith((".safetensors", ".bin", ".pt")):
@@ -216,7 +225,8 @@ def main():
 
     # --- Model size metrics ---
     fp16_gb = get_model_disk_size_gb(args.model)
-    quantized_gb = get_quantized_disk_size_gb(quantized_model_path or args.quantized_dir)
+    quantized_size_source = args.quantized_dir if is_factors_dir(args.quantized_dir) else (quantized_model_path or args.quantized_dir)
+    quantized_gb = get_quantized_disk_size_gb(quantized_size_source)
     compression_ratio = fp16_gb / quantized_gb if quantized_gb > 0 else None
 
     # --- Quantization config ---

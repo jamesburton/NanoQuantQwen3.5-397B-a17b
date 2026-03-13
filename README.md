@@ -140,7 +140,7 @@ The paper reports 13 hours for a 70B dense model on one H100 80GB. Qwen3.5-397B-
 - [ ] Run Phase 2 (block reconstruction) on first 3 blocks
   - **Gate:** Code correctly iterates over 60 expert weight matrices per MoE block without shape errors
   - **Gate:** Shared expert (`shared_expert_intermediate_size=5632`) handled separately from routed experts
-- [ ] Run full 24-block reconstruction + Phase 3 scale refinement
+- [ ] Run full CUDA rerun for Phi-tiny-MoE-instruct with optimized reconstruction path; connected SlimMoE Phase 3 KD probes (`factor_scales`, `factor_latents`) are implemented but currently fail the FP-cache runtime budget on the local RTX 3060
 - [ ] **Pass gate:** WikiText-2 perplexity ≤ 2× BF16 baseline (rough acceptable threshold for 0.7 bit/weight)
 - [ ] Record: time per block, peak GPU/CPU RAM, any code changes required (especially offloading logic)
 
@@ -294,3 +294,4 @@ python scripts/eval_ppl.py \
 | — | Stage 3: Qwen3.5-397B-A17B DeltaNet patch | ⬜ |
 | — | Stage 3: full run + validation | ⬜ |
 | — | HuggingFace upload | ⬜ |
+

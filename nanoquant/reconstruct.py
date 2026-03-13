@@ -1,10 +1,11 @@
 """Block reconstruction pipeline for NanoQuant."""
 
+import math
 import torch
 import torch.nn as nn
 from typing import Dict, Any, Optional
 
-from nanoquant.admm import lb_admm
+from nanoquant.admm import lb_admm, _clamp_signed_scales
 from nanoquant.hessian import robust_diagonal
 from nanoquant.moe import get_weight_views, get_hessian_key, WeightView
 
@@ -62,18 +63,20 @@ def _call_block(block, inputs):
 
 
 def reconstruct_weight(U_bin, V_bin, s1, s2, d_in, d_out) -> torch.Tensor:
-    """Reconstruct weight from binary factors and scale/preconditioner vectors.
+    """Reconstruct weight from binary factors and stored preconditioner vectors.
 
-    W_approx = diag(d_out)^{-1} @ diag(s1) @ (U @ V^T) @ diag(s2) @ diag(d_in)^{-1}
+    Quantization forms W_tilde = diag(d_out) @ W @ diag(d_in), then factorizes
+    W_tilde into a binary core plus learned row/column scales. Recover W by
+    multiplying the reconstructed core by the stored preconditioners.
     """
     U = U_bin.float()
     V = V_bin.float()
     core = U @ V.T  # (m, n)
     W_approx = s1.unsqueeze(1) * core * s2.unsqueeze(0)
-    d_out_inv = 1.0 / torch.clamp(d_out.float(), min=1e-8)
-    d_in_inv = 1.0 / torch.clamp(d_in.float(), min=1e-8)
-    W_approx = d_out_inv.unsqueeze(1) * W_approx * d_in_inv.unsqueeze(0)
+    W_approx = d_out.float().unsqueeze(1) * W_approx * d_in.float().unsqueeze(0)
     return W_approx
+
+
 
 
 def quantize_weight(
@@ -95,7 +98,8 @@ def quantize_weight(
     if d_out.shape[0] != m:
         d_out = torch.ones(m, device=W.device, dtype=torch.float32)
 
-    W_tilde = torch.diag(d_out) @ W @ torch.diag(d_in)
+    # Avoid materializing dense diagonal matrices for large expert weights.
+    W_tilde = d_out.unsqueeze(1) * W * d_in.unsqueeze(0)
 
     # Guard against float32 overflow from large Hessian diagonals
     if not torch.isfinite(W_tilde).all():
@@ -145,14 +149,26 @@ def tune_latent_ste(
     lr: float = 1e-3,
 ) -> Dict[str, torch.Tensor]:
     """Straight-Through Estimator refinement of binary factors."""
-    U_lat = U_lat.clone().detach().requires_grad_(True)
-    V_lat = V_lat.clone().detach().requires_grad_(True)
-    s1_p = s1.clone().detach().requires_grad_(True)
-    s2_p = s2.clone().detach().requires_grad_(True)
+    U_init = U_lat.clone().detach()
+    V_init = V_lat.clone().detach()
+    s1_init = _clamp_signed_scales(s1.clone().detach(), eps=1e-8)
+    s2_init = _clamp_signed_scales(s2.clone().detach(), eps=1e-8)
+
+    U_lat = U_init.clone().requires_grad_(True)
+    V_lat = V_init.clone().requires_grad_(True)
+    s1_p = s1_init.clone().requires_grad_(True)
+    s2_p = s2_init.clone().requires_grad_(True)
 
     optimizer = torch.optim.Adam([U_lat, V_lat, s1_p, s2_p], lr=lr)
     d_out_inv = 1.0 / torch.clamp(d_out.float(), min=1e-8)
     d_in_inv = 1.0 / torch.clamp(d_in.float(), min=1e-8)
+    best_loss = math.inf
+    best_state = {
+        "U_lat": U_init.clone(),
+        "V_lat": V_init.clone(),
+        "s1": s1_init.clone(),
+        "s2": s2_init.clone(),
+    }
 
     for _ in range(n_iters):
         optimizer.zero_grad()
@@ -164,12 +180,42 @@ def tune_latent_ste(
         W_approx = d_out_inv.unsqueeze(1) * W_approx * d_in_inv.unsqueeze(0)
         out = X_in @ W_approx.T
         loss = (out - target).pow(2).mean()
+        if not torch.isfinite(loss):
+            break
         loss.backward()
+
+        grad_finite = True
+        for param in (U_lat, V_lat, s1_p, s2_p):
+            if param.grad is not None and not torch.isfinite(param.grad).all():
+                grad_finite = False
+                break
+        if not grad_finite:
+            break
+
+        torch.nn.utils.clip_grad_norm_([U_lat, V_lat, s1_p, s2_p], max_norm=1.0)
         optimizer.step()
 
-    U_f = torch.sign(U_lat.detach()); U_f[U_f == 0] = 1.0
-    V_f = torch.sign(V_lat.detach()); V_f[V_f == 0] = 1.0
-    return {"U_bin": U_f, "V_bin": V_f, "s1": s1_p.detach(), "s2": s2_p.detach()}
+        with torch.no_grad():
+            s1_p.copy_(torch.clamp(s1_p.abs(), min=1e-8, max=1e4) * torch.where(s1_p >= 0, torch.ones_like(s1_p), -torch.ones_like(s1_p)))
+            s2_p.copy_(torch.clamp(s2_p.abs(), min=1e-8, max=1e4) * torch.where(s2_p >= 0, torch.ones_like(s2_p), -torch.ones_like(s2_p)))
+            params_finite = all(torch.isfinite(param).all() for param in (U_lat, V_lat, s1_p, s2_p))
+            if not params_finite:
+                break
+            loss_value = float(loss.item())
+            if loss_value < best_loss:
+                best_loss = loss_value
+                best_state = {
+                    "U_lat": U_lat.detach().clone(),
+                    "V_lat": V_lat.detach().clone(),
+                    "s1": s1_p.detach().clone(),
+                    "s2": s2_p.detach().clone(),
+                }
+
+    U_f = torch.sign(best_state["U_lat"])
+    U_f[U_f == 0] = 1.0
+    V_f = torch.sign(best_state["V_lat"])
+    V_f[V_f == 0] = 1.0
+    return {"U_bin": U_f, "V_bin": V_f, "s1": best_state["s1"], "s2": best_state["s2"]}
 
 
 def reconstruct_block(
@@ -195,22 +241,62 @@ def reconstruct_block(
     tpre       = cfg.get("tpre", 200)
     tpost      = cfg.get("tpost", 200)
     gamma      = cfg.get("gamma", 0.2)
+    skip_patterns = cfg.get("skip_patterns", []) or []
+    attn_rank_override = cfg.get("attn_rank_override")
 
     # Compute FP block targets before any modification
     block.eval()
     with torch.no_grad():
         block_targets = _call_block(block, block_inputs)
 
-    # Phase 1: Pre-tune FP weights (error propagation mitigation)
-    if tpre > 0:
-        tune_fp(block, block_inputs, block_targets, n_iters=tpre, lr=1e-4)
+    # Phase 1: Pre-tune FP weights is a no-op here because block_targets are
+    # computed from the same unmodified block immediately above, so the initial
+    # loss is already ~0. Preserve the config value but skip the redundant loop.
 
     # Phase 2 + 3: Quantize each weight, then STE-refine
     quantized: Dict[str, Dict[str, torch.Tensor]] = {}
+    block_input_flat = block_inputs.reshape(-1, block_inputs.shape[-1]).float().to(device)
+
+    # Capture nn.Linear inputs for this block once instead of replaying the full
+    # block for every weight during STE refinement.
+    layer_inputs_map: Dict[str, torch.Tensor] = {}
+    hook_handles = []
+    module_name_map = dict(block.named_modules())
+
+    def _make_hook(layer_name: str):
+        def _hook(mod, inp, out):
+            if layer_name in layer_inputs_map:
+                return
+            x = inp[0].detach().reshape(-1, inp[0].shape[-1]).float()
+            layer_inputs_map[layer_name] = x
+        return _hook
 
     for wv in get_weight_views(block, block_prefix):
+        if "[" in wv.name:
+            continue
+        try:
+            target_mod = module_name_map[wv.name]
+        except KeyError:
+            continue
+        if isinstance(target_mod, nn.Linear):
+            hook_handles.append(target_mod.register_forward_hook(_make_hook(wv.name)))
+
+    if hook_handles:
+        with torch.no_grad():
+            try:
+                _call_block(block, block_inputs)
+            except Exception:
+                pass
+        for handle in hook_handles:
+            handle.remove()
+
+    for wv in get_weight_views(block, block_prefix):
+        if any(pattern in wv.name for pattern in skip_patterns):
+            continue
+
         W = wv.weight.to(device)  # (out, in) float32
         m, n = W.shape
+        local_rank = attn_rank_override if attn_rank_override and ".self_attn." in wv.name else rank
 
         # Look up Hessian diagonal
         h_key = get_hessian_key(wv, block_prefix)
@@ -225,43 +311,15 @@ def reconstruct_block(
         d_out = torch.ones(m, device=device, dtype=torch.float32)
 
         # LB-ADMM quantization
-        q = quantize_weight(W, d_in, d_out, rank=rank, rho=rho, lam=lam, admm_iters=admm_iters)
+        q = quantize_weight(W, d_in, d_out, rank=local_rank, rho=rho, lam=lam, admm_iters=admm_iters)
 
         # Phase 3: STE refinement using captured input activations
         if tpost > 0:
-            layer_inputs_acc = []
-
-            # Capture input activations flowing into this weight
-            # For nn.Linear layers we hook the module; for fused experts we
-            # approximate using the block input projected to the right shape.
-            captured_hook = None
-            if "[" not in wv.name:  # nn.Linear — can hook directly
-                target_mod = block
-                try:
-                    for part in wv.name.split("."):
-                        target_mod = getattr(target_mod, part)
-                    if isinstance(target_mod, nn.Linear):
-                        def _hook(mod, inp, out, acc=layer_inputs_acc):
-                            x = inp[0].detach().reshape(-1, inp[0].shape[-1]).float()
-                            acc.append(x)
-                        captured_hook = target_mod.register_forward_hook(_hook)
-                except AttributeError:
-                    pass
-
-            with torch.no_grad():
-                try:
-                    _call_block(block, block_inputs)
-                except Exception:
-                    pass
-
-            if captured_hook is not None:
-                captured_hook.remove()
-
-            if layer_inputs_acc:
-                X_in = layer_inputs_acc[0].to(device)
+            if wv.name in layer_inputs_map:
+                X_in = layer_inputs_map[wv.name].to(device)
             else:
                 # Approximation for fused experts: use block input flattened
-                X_in = block_inputs.reshape(-1, block_inputs.shape[-1]).float().to(device)
+                X_in = block_input_flat
                 # Trim/pad to match weight's in_features
                 if X_in.shape[1] != n:
                     X_in = X_in[:, :n] if X_in.shape[1] > n else torch.nn.functional.pad(X_in, (0, n - X_in.shape[1]))
@@ -282,9 +340,25 @@ def reconstruct_block(
             q["d_out"] = d_out
 
         # Reconstruct and write back
+        if not all(torch.isfinite(q[name].float()).all() for name in ("U_bin", "V_bin", "s1", "s2", "d_in", "d_out")):
+            q = {
+                "U_bin": torch.sign(torch.nan_to_num(q["U_bin"].detach().float(), nan=1.0, posinf=1.0, neginf=-1.0)),
+                "V_bin": torch.sign(torch.nan_to_num(q["V_bin"].detach().float(), nan=1.0, posinf=1.0, neginf=-1.0)),
+                "s1": _clamp_signed_scales(torch.nan_to_num(q["s1"].detach().float(), nan=1.0, posinf=1.0, neginf=-1.0), eps=1e-8),
+                "s2": _clamp_signed_scales(torch.nan_to_num(q["s2"].detach().float(), nan=1.0, posinf=1.0, neginf=-1.0), eps=1e-8),
+                "d_in": torch.clamp(torch.nan_to_num(q["d_in"].detach().float(), nan=1.0, posinf=1.0, neginf=1.0), min=1e-8),
+                "d_out": torch.clamp(torch.nan_to_num(q["d_out"].detach().float(), nan=1.0, posinf=1.0, neginf=1.0), min=1e-8),
+            }
+            q["U_bin"][q["U_bin"] == 0] = 1.0
+            q["V_bin"][q["V_bin"] == 0] = 1.0
+
         W_new = reconstruct_weight(q["U_bin"], q["V_bin"], q["s1"], q["s2"], q["d_in"], q["d_out"])
+        if not torch.isfinite(W_new).all():
+            q = quantize_weight(W, d_in, d_out, rank=local_rank, rho=rho, lam=lam, admm_iters=admm_iters)
+            W_new = reconstruct_weight(q["U_bin"], q["V_bin"], q["s1"], q["s2"], q["d_in"], q["d_out"])
         wv.write(W_new.to(device))
 
         quantized[wv.name] = {k: v.cpu() for k, v in q.items()}
 
     return quantized
+

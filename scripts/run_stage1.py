@@ -73,6 +73,10 @@ def main():
         "--parallel-blocks", type=int, default=1,
         help="Number of blocks to process in parallel (MOE-04 stub, default 1 = sequential)."
     )
+    parser.add_argument(
+        "--skip-eval", action="store_true",
+        help="Skip inline perplexity evaluation after quantization. Use scripts/run_eval.py separately."
+    )
     args = parser.parse_args()
 
     if args.checkpoint_dir is None:
@@ -110,32 +114,33 @@ def main():
     t_quant = time.time() - t_start
     print(f"\nQuantization took {t_quant:.1f}s ({t_quant/60:.1f}min)")
 
-    # Evaluate perplexity using auto-detected device
-    eval_device = "cuda" if torch.cuda.is_available() else "cpu"
-    print("\n=== Evaluating WikiText-2 Perplexity ===")
-    ppl = evaluate_perplexity(args.output, device=eval_device)
-    print(f"Quantized model perplexity: {ppl:.2f}")
+    if not args.skip_eval:
+        # Evaluate perplexity using auto-detected device
+        eval_device = "cuda" if torch.cuda.is_available() else "cpu"
+        print("\n=== Evaluating WikiText-2 Perplexity ===")
+        ppl = evaluate_perplexity(args.output, device=eval_device)
+        print(f"Quantized model perplexity: {ppl:.2f}")
 
-    # Perplexity gate: warn if suspiciously high
-    if args.max_blocks and args.max_blocks >= 3 and ppl > 100:
-        print(
-            f"\nWARNING: Perplexity {ppl:.2f} is very high after {args.max_blocks} blocks. "
-            "This may indicate quantization quality issues."
-        )
-
-    # Try baseline comparison
-    try:
-        print(f"\nComputing baseline perplexity for {args.model}...")
-        baseline_ppl = evaluate_perplexity(args.model, device=eval_device)
-        print(f"Baseline perplexity: {baseline_ppl:.2f}")
-        print(f"Degradation: {ppl / baseline_ppl:.2f}x")
-        if ppl > 5 * baseline_ppl:
+        # Perplexity gate: warn if suspiciously high
+        if args.max_blocks and args.max_blocks >= 3 and ppl > 100:
             print(
-                f"\nWARNING: Quantized PPL ({ppl:.2f}) is >{5}x baseline ({baseline_ppl:.2f}). "
-                "Consider increasing rank or calibration samples."
+                f"\nWARNING: Perplexity {ppl:.2f} is very high after {args.max_blocks} blocks. "
+                "This may indicate quantization quality issues."
             )
-    except Exception as e:
-        print(f"Could not compute baseline: {e}")
+
+        # Try baseline comparison
+        try:
+            print(f"\nComputing baseline perplexity for {args.model}...")
+            baseline_ppl = evaluate_perplexity(args.model, device=eval_device)
+            print(f"Baseline perplexity: {baseline_ppl:.2f}")
+            print(f"Degradation: {ppl / baseline_ppl:.2f}x")
+            if ppl > 5 * baseline_ppl:
+                print(
+                    f"\nWARNING: Quantized PPL ({ppl:.2f}) is >{5}x baseline ({baseline_ppl:.2f}). "
+                    "Consider increasing rank or calibration samples."
+                )
+        except Exception as e:
+            print(f"Could not compute baseline: {e}")
 
     print(f"\nTotal time: {time.time() - t_start:.1f}s")
 

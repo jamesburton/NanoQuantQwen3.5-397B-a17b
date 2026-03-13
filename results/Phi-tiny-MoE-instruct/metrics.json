@@ -1,25 +1,25 @@
 {
   "model": "microsoft/Phi-tiny-MoE-instruct",
   "model_short_name": "Phi-tiny-MoE-instruct",
-  "date": "2026-03-08",
+  "date": "2026-03-13",
   "hardware": {
-    "gpu": null,
-    "peak_vram_gb": 0.0,
-    "peak_ram_gb": 34.22
+    "gpu": "NVIDIA GeForce RTX 3060",
+    "peak_vram_gb": 8.07,
+    "peak_ram_gb": 74.21
   },
   "model_size": {
     "fp16_gb": 6.99,
-    "quantized_gb": 6.99,
-    "compression_ratio": 1.0
+    "quantized_gb": 0.78,
+    "compression_ratio": 9.0
   },
   "timing": {
-    "baseline_eval_seconds": 5300.1,
-    "quantized_eval_seconds": 5252.3
+    "baseline_eval_seconds": 1847.0,
+    "quantized_eval_seconds": 633.3
   },
   "perplexity": {
-    "fp16_baseline": 1926.9974,
-    "quantized": 272276.9375,
-    "degradation_ratio": 141.296,
+    "fp16_baseline": 7.1747,
+    "quantized": 218212.2188,
+    "degradation_ratio": 30413.9616,
     "eval_settings": {
       "dataset": "wikitext-2-raw-v1",
       "split": "test",

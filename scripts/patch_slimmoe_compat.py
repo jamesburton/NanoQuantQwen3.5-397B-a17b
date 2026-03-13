@@ -1,28 +1,10 @@
 #!/usr/bin/env python3
-"""Patch microsoft/Phi-tiny-MoE-instruct modeling_slimmoe.py for transformers>=5.x compatibility.
-
-The SlimMoE modeling file was written for transformers~4.43.3. When running with
-transformers>=5.x, several APIs changed. This script patches the cached HF module
-file to restore compatibility.
-
-Usage:
-    python scripts/patch_slimmoe_compat.py
-
-This must be run once after the model is first downloaded. It patches:
-  1. flash_attn import made optional (flash_attn not required for CPU/SDPA inference)
-  2. is_torch_fx_available import stub (removed from transformers 5.x)
-  3. rope_scaling 'rope_type' vs 'type' key difference (transformers 5.x sets 'rope_type')
-  4. DynamicCache API shims (from_legacy_cache, to_legacy_cache, get_usable_length, seen_tokens)
-  5. DynamicCache.from_legacy_cache call made conditional
-  6. _tied_weights_keys changed from list to dict (transformers 5.x save_pretrained)
-"""
+"""Patch microsoft/Phi-tiny-MoE-instruct modeling_slimmoe.py for transformers>=5.x compatibility."""
 
 import os
-import re
 
 
 def find_cached_slimmoe() -> list[str]:
-    """Find all copies of modeling_slimmoe.py in the HF cache."""
     cache_root = os.path.expanduser("~/.cache/huggingface")
     found = []
     for root, _, files in os.walk(cache_root):
@@ -33,54 +15,62 @@ def find_cached_slimmoe() -> list[str]:
 
 
 def patch_file(path: str) -> bool:
-    """Apply all compatibility patches to a modeling_slimmoe.py file.
-
-    Returns True if any patches were applied.
-    """
     with open(path, encoding="utf-8") as f:
         content = f.read()
 
     original = content
     changed = False
 
-    # Patch 1: Make flash_attn optional
-    OLD1 = "from einops import rearrange\nfrom flash_attn.layers.rotary import RotaryEmbedding as FlashRotaryEmbedding"
-    NEW1 = (
+    old1 = "from einops import rearrange\nfrom flash_attn.layers.rotary import RotaryEmbedding as FlashRotaryEmbedding"
+    new1 = (
         "from einops import rearrange\n"
         "try:\n"
         "    from flash_attn.layers.rotary import RotaryEmbedding as FlashRotaryEmbedding\n"
         "except ImportError:\n"
         "    FlashRotaryEmbedding = None"
     )
-    if OLD1 in content:
-        content = content.replace(OLD1, NEW1)
+    if old1 in content:
+        content = content.replace(old1, new1)
         changed = True
-        print(f"  [OK] Patch 1: flash_attn optional import")
+        print("  [OK] Patch 1: flash_attn optional import")
     elif "FlashRotaryEmbedding = None" in content:
-        print(f"  [--] Patch 1: already applied")
+        print("  [--] Patch 1: already applied")
     else:
-        print(f"  [??] Patch 1: pattern not found (may not need patching)")
+        print("  [??] Patch 1: pattern not found")
 
-    # Patch 2: is_torch_fx_available stub
-    OLD2 = "from transformers.utils.import_utils import is_torch_fx_available"
-    NEW2 = (
+    old2 = "from transformers.utils.import_utils import is_torch_fx_available"
+    new2 = (
         "try:\n"
         "    from transformers.utils.import_utils import is_torch_fx_available\n"
         "except ImportError:\n"
         "    def is_torch_fx_available():\n"
         "        return False"
     )
-    if OLD2 in content:
-        content = content.replace(OLD2, NEW2)
+    broken2 = (
+        "try:\n"
+        "    try:\n"
+        "    from transformers.utils.import_utils import is_torch_fx_available\n"
+        "except ImportError:\n"
+        "    def is_torch_fx_available():\n"
+        "        return False\n"
+        "except ImportError:\n"
+        "    def is_torch_fx_available():\n"
+        "        return False"
+    )
+    if broken2 in content:
+        content = content.replace(broken2, new2)
         changed = True
-        print(f"  [OK] Patch 2: is_torch_fx_available stub")
-    elif "def is_torch_fx_available():" in content:
-        print(f"  [--] Patch 2: already applied")
+        print("  [OK] Patch 2: repaired broken nested stub")
+    elif new2 in content:
+        print("  [--] Patch 2: already applied")
+    elif old2 in content:
+        content = content.replace(old2, new2)
+        changed = True
+        print("  [OK] Patch 2: is_torch_fx_available stub")
     else:
-        print(f"  [??] Patch 2: pattern not found")
+        print("  [??] Patch 2: pattern not found")
 
-    # Patch 3: rope_scaling 'type' vs 'rope_type' key
-    OLD3 = (
+    old3 = (
         "        if getattr(config, 'rope_scaling', None) is None:\n"
         "            self.rotary_emb = PhiMoERotaryEmbedding(\n"
         "                self.head_dim,\n"
@@ -94,10 +84,8 @@ def patch_file(path: str) -> bool:
         "            else:\n"
         "                raise ValueError(f\"Unknown RoPE scaling type {scaling_type}\")"
     )
-    NEW3 = (
+    new3 = (
         "        _rope_scaling = getattr(config, 'rope_scaling', None)\n"
-        "        # transformers>=5.x auto-sets rope_scaling={'rope_type': 'default'} when none is specified.\n"
-        "        # Treat 'default' rope_type (or missing 'type' key) the same as no rope_scaling.\n"
         "        _rope_type = None\n"
         "        if _rope_scaling is not None:\n"
         "            _rope_type = _rope_scaling.get(\"type\") or _rope_scaling.get(\"rope_type\")\n"
@@ -116,20 +104,19 @@ def patch_file(path: str) -> bool:
         "            else:\n"
         "                raise ValueError(f\"Unknown RoPE scaling type {scaling_type}\")"
     )
-    if OLD3 in content:
-        content = content.replace(OLD3, NEW3)
+    if old3 in content:
+        content = content.replace(old3, new3)
         changed = True
-        print(f"  [OK] Patch 3: rope_scaling type key compatibility")
+        print("  [OK] Patch 3: rope_scaling compatibility")
     elif "_rope_type = None" in content:
-        print(f"  [--] Patch 3: already applied")
+        print("  [--] Patch 3: already applied")
     else:
-        print(f"  [??] Patch 3: pattern not found")
+        print("  [??] Patch 3: pattern not found")
 
-    # Patch 4: DynamicCache compatibility shims
-    SHIMS_MARKER = "# --- transformers>=5.x compatibility shims ---"
-    if SHIMS_MARKER not in content:
-        SHIMS_INSERT_AFTER = "from transformers.cache_utils import Cache, DynamicCache"
-        SHIMS = (
+    shims_marker = "# --- transformers>=5.x compatibility shims ---"
+    if shims_marker not in content:
+        insert_after = "from transformers.cache_utils import Cache, DynamicCache"
+        shims = (
             "\n\n"
             "# --- transformers>=5.x compatibility shims ---\n"
             "# Patch DynamicCache to restore methods removed in transformers 5.x\n"
@@ -161,50 +148,59 @@ def patch_file(path: str) -> bool:
             "    DynamicCache.seen_tokens = property(lambda self: self._seen_tokens)\n"
             "# --- end compatibility shims ---"
         )
-        if SHIMS_INSERT_AFTER in content:
-            content = content.replace(
-                SHIMS_INSERT_AFTER,
-                SHIMS_INSERT_AFTER + SHIMS,
-                1,
-            )
+        if insert_after in content:
+            content = content.replace(insert_after, insert_after + shims, 1)
             changed = True
-            print(f"  [OK] Patch 4: DynamicCache compatibility shims")
+            print("  [OK] Patch 4: DynamicCache shims")
     else:
-        print(f"  [--] Patch 4: already applied")
+        print("  [--] Patch 4: already applied")
 
-    # Patch 5: DynamicCache.from_legacy_cache conditional call
-    OLD5 = "                past_key_values = DynamicCache.from_legacy_cache(past_key_values)"
-    NEW5 = (
+    old5 = "                past_key_values = DynamicCache.from_legacy_cache(past_key_values)"
+    new5 = (
         "                # from_legacy_cache removed in transformers>=5.x; use DynamicCache() directly\n"
         "                if hasattr(DynamicCache, 'from_legacy_cache'):\n"
         "                    past_key_values = DynamicCache.from_legacy_cache(past_key_values)\n"
         "                else:\n"
         "                    past_key_values = DynamicCache()"
     )
-    if OLD5 in content:
-        content = content.replace(OLD5, NEW5)
+    broken5 = (
+        "                # from_legacy_cache removed in transformers>=5.x; use DynamicCache() directly\n"
+        "                if hasattr(DynamicCache, 'from_legacy_cache'):\n"
+        "                    # from_legacy_cache removed in transformers>=5.x; use DynamicCache() directly\n"
+        "                if hasattr(DynamicCache, 'from_legacy_cache'):\n"
+        "                    past_key_values = DynamicCache.from_legacy_cache(past_key_values)\n"
+        "                else:\n"
+        "                    past_key_values = DynamicCache()\n"
+        "                else:\n"
+        "                    past_key_values = DynamicCache()"
+    )
+    if broken5 in content:
+        content = content.replace(broken5, new5)
         changed = True
-        print(f"  [OK] Patch 5: DynamicCache.from_legacy_cache conditional")
-    elif "from_legacy_cache removed in transformers>=5.x" in content:
-        print(f"  [--] Patch 5: already applied")
+        print("  [OK] Patch 5: repaired broken nested conditional")
+    elif new5 in content:
+        print("  [--] Patch 5: already applied")
+    elif old5 in content:
+        content = content.replace(old5, new5)
+        changed = True
+        print("  [OK] Patch 5: conditional cache conversion")
     else:
-        print(f"  [??] Patch 5: pattern not found")
+        print("  [??] Patch 5: pattern not found")
 
-    # Patch 6: _tied_weights_keys list -> dict
-    OLD6 = '    _tied_weights_keys = ["lm_head.weight"]'
-    NEW6 = (
+    old6 = '    _tied_weights_keys = ["lm_head.weight"]'
+    new6 = (
         '    # transformers>=5.x expects _tied_weights_keys to be a dict {key: tied_key}\n'
         '    # Convert list to dict for compatibility\n'
         '    _tied_weights_keys = {"lm_head.weight": "model.embed_tokens.weight"}'
     )
-    if OLD6 in content:
-        content = content.replace(OLD6, NEW6)
+    if old6 in content:
+        content = content.replace(old6, new6)
         changed = True
-        print(f"  [OK] Patch 6: _tied_weights_keys list -> dict")
+        print("  [OK] Patch 6: tied weights dict")
     elif '"lm_head.weight": "model.embed_tokens.weight"' in content:
-        print(f"  [--] Patch 6: already applied")
+        print("  [--] Patch 6: already applied")
     else:
-        print(f"  [??] Patch 6: pattern not found")
+        print("  [??] Patch 6: pattern not found")
 
     if content != original:
         with open(path, "w", encoding="utf-8") as f:
@@ -217,17 +213,12 @@ def patch_file(path: str) -> bool:
 def main():
     print("Searching for modeling_slimmoe.py in HF cache...")
     paths = find_cached_slimmoe()
-
     if not paths:
         print("No cached modeling_slimmoe.py found.")
-        print("Run: python -c \"from transformers import AutoConfig; AutoConfig.from_pretrained('microsoft/Phi-tiny-MoE-instruct', trust_remote_code=True)\"")
-        print("Then re-run this script.")
         return
-
     for path in paths:
         print(f"\nPatching: {path}")
         patch_file(path)
-
     print("\nDone. Patches applied for transformers>=5.x compatibility.")
 
 

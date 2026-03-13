@@ -7,6 +7,12 @@ See: .planning/PROJECT.md (updated 2026-02-22)
 **Core value:** Consumer-friendly sub-1-bit quantization of MoE models via NanoQuant's ADMM-based pipeline
 **Current focus:** Phase 4 complete. Next: Phase 3 (Scaling and Evaluation)
 
+Phase 3 KD status:
+- Reconstruction path optimized: Phi block time reduced from about 329s to about 95s on local RTX 3060 workspace.
+- Dead end recorded: hook-based connected-scale KD is too slow on this machine and does not justify current runtime cost.
+- Dead end recorded: initial factor-scale prototype was removed because it wrote weights outside autograd.
+- Tested implementation target: connected SlimMoE expert override for `block_sparse_moe.experts.*.w1/w2/w3` is now in place. Both `factor_scales` and `factor_latents` probes hit the Phase 3 FP-cache budget limit on this hardware (`sample_too_slow` at about 87-88s for the first KD sample).
+
 ## Current Position
 
 Phase: 4 of 4 (Phi MoE Support)
@@ -68,15 +74,24 @@ Progress: [██████████] 100%
 
 ### Pending Todos
 
-- None for Phase 4
+- Review upstream origin/main changes backed up under backups/origin-main-2026-03-10/ before next merge attempt:
+- nanoquant/quantize.py: upstream CPU thread tuning and float32 CPU load path reviewed; deferred because local Phase 3 KD refactor diverged substantially and needs targeted benchmarking before cherry-picking
+- scripts/run_stage1.py: upstream CPU thread configuration and float32 eval load path reviewed; deferred because local CLI/workflow diverged (--skip-eval) and needs manual merge if CPU-only eval becomes a priority
+- scripts/patch_slimmoe_compat.py: reviewed; local version already contains stronger idempotent repair logic than upstream
+- scripts/monitor_quant.py: upstream helper integrated locally
+- Merge decision for now: keep local working versions because local experimental changes are broader and current eval/test signal is not strong enough to justify replacing them blindly
 
 ### Blockers/Concerns
 
 - SCALE-04 (Qwen3.5-397B) requires cloud GPU — consumer 12GB constraint applies to phases 1-2 and SCALE-01 through SCALE-03 only
 - Phase 4 PPL degradation (141x) is high due to zero-refinement settings; CUDA re-run with defaults expected to improve to ~1.5-3x
+- Local branch is behind origin/main by 2 commits; upstream overlap has been backed up rather than merged because verification coverage remains weak and recent eval outcomes are not yet convincing
 
 ## Session Continuity
 
 Last session: 2026-03-08
 Stopped at: Completed Phase 4 — all plans done, gaps closed, committed
 Resume file: None
+
+
+

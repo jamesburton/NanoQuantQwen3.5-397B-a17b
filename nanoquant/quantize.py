@@ -12,7 +12,7 @@ from datasets import load_dataset
 
 from nanoquant.hessian import capture_hessians, robust_diagonal
 from nanoquant.reconstruct import reconstruct_block, set_rotary_emb, _call_block
-from nanoquant.refine import tune_scales_kd
+from nanoquant.refine import Phase3KDConfig, run_phase3_kd
 from nanoquant.hardware import probe_hardware, print_hardware_summary
 from nanoquant.checkpoint import save_quantized_checkpoint, collect_shared_layers
 
@@ -220,6 +220,11 @@ def quantize_model(
         blocks[i].cpu()
         torch.cuda.empty_cache()
 
+    skip_patterns_env = os.getenv("NANOQUANT_SKIP_PATTERNS", "").strip()
+    skip_patterns = [p.strip() for p in skip_patterns_env.split(",") if p.strip()]
+    attn_rank_override_env = os.getenv("NANOQUANT_ATTN_RANK", "").strip()
+    attn_rank_override = int(attn_rank_override_env) if attn_rank_override_env else None
+
     cfg: Dict[str, Any] = {
         "rank": rank,
         "gamma": gamma,
@@ -228,6 +233,8 @@ def quantize_model(
         "admm_iters": admm_iters,
         "tpre": tpre,
         "tpost": tpost,
+        "skip_patterns": skip_patterns,
+        "attn_rank_override": attn_rank_override,
     }
 
     block_times = []
@@ -259,6 +266,12 @@ def quantize_model(
         # Compute output for next block using quantized weights (keep model_dtype)
         with torch.no_grad():
             block_input = _run_block(block, bi)
+
+        if not torch.isfinite(block_input).all():
+            raise RuntimeError(
+                f"Non-finite block output detected after block {block_idx}. "+
+                "Stopping to avoid corrupting downstream checkpoints."
+            )
 
         # Save checkpoint
         if checkpoint_dir:
@@ -297,23 +310,37 @@ def quantize_model(
             )
         else:
             print(f"\n=== Phase 3: Global KD refinement ({tglob} iters) ===")
-            print(f"Loading FP reference model ({model_size_gb:.1f} GB)...")
-            model_fp = AutoModelForCausalLM.from_pretrained(
-                model_name_or_path,
-                dtype=torch.float16,
-                trust_remote_code=True,
-                low_cpu_mem_usage=True,
-                device_map="cpu",
+            kd_config = Phase3KDConfig(
+                strategy="connected_scales",
+                kd_samples=2,
+                lr=1e-3,
+                min_improvement_ratio=0.02,
+                eval_interval=25,
+                plateau_intervals=2,
+                max_cache_seconds=120.0,
+                max_sample_seconds=60.0,
             )
-            model_fp.eval()
-            for p in model_fp.parameters():
-                p.requires_grad_(False)
-            kd_loader = _make_dataloader(cal_data[:16], batch_size=1)
-            tune_scales_kd(model, model_fp, kd_loader, n_iters=tglob, lr=1e-3, device=device)
-            del model_fp
-            torch.cuda.empty_cache()
+            kd_result = run_phase3_kd(
+                model,
+                model_name_or_path,
+                cal_data,
+                n_iters=tglob,
+                device=device,
+                config=kd_config,
+                all_quantized=all_quantized,
+            )
+            print(
+                f"  KD result: strategy={kd_result.strategy} "
+                f"applied={kd_result.applied} "
+                f"reason={kd_result.reason} "
+                f"baseline_kl={kd_result.baseline_kl} "
+                f"final_kl={kd_result.final_kl} "
+                f"improvement_ratio={kd_result.improvement_ratio} "
+                f"iters={kd_result.n_iters}"
+            )
+            if not kd_result.applied:
+                print("  Phase 3 KD did not clear the acceptance checks; both connected factor-scale and latent-factor probes are currently budget-limited on this machine.")
 
-    # ========= Save =========
     print(f"\nSaving quantized model to {output_dir}")
     model.save_pretrained(output_dir)
     tokenizer.save_pretrained(output_dir)
@@ -351,3 +378,7 @@ def quantize_model(
         print(f"  Average per block: {sum(block_times)/len(block_times):.1f}s")
 
     print("\nQuantization complete!")
+
+
+
+

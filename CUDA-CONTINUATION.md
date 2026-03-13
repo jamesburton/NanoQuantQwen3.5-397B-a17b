@@ -39,7 +39,7 @@ python scripts/patch_slimmoe_compat.py
 
 ## Step 2: Re-quantize with Full Refinement
 
-The key difference: default settings include `tpre=200, tpost=200, tglob=1000` refinement passes.
+The key difference: default settings include `tpre=200, tpost=200`, while `tglob=1000` is currently under redevelopment for Phi-tiny-MoE-instruct. On this workspace, Phase 3 KD should be treated as experimental and not a prerequisite for the CUDA rerun.
 
 ```bash
 python scripts/run_stage1.py \
@@ -51,9 +51,34 @@ python scripts/run_stage1.py \
   --admm-iters 50
 ```
 
-**Expected timing:** ~30-60 minutes on a 12GB consumer GPU (3.8B params, 32 blocks).
+**Observed timing in this workspace after reconstruction-path optimization:** about `~95s` per block on an RTX 3060 with CPU model load, plus `~3 minutes` Hessian capture. A full 32-block rerun is therefore about `~55 minutes` before eval, excluding any future Phase 3 KD work.
 
 Block checkpoints are saved to `output/Phi-tiny-MoE-instruct/checkpoints/block_*.pt` for resume support — if interrupted, re-running will skip completed blocks.
+
+
+## Current Phase 3 Status
+
+Phase 3 KD has been researched and partially prototyped, but the original path is not production-viable yet for Phi-tiny-MoE-instruct:
+
+- Dead end 1: `connected_scales` optimized hook-attached output scales, but those were not the saved quantization factors. Even after making them connected to inference, the FP-reference cache path was too slow on this machine (`~87s` per 2048-token sample on CPU).
+- Dead end 2: an initial `factor_scales` prototype that wrote reconstructed weights back into modules outside autograd was removed. It was not a valid basis for Phase 3 because gradients did not actually flow to the saved factors.
+- Tested path 3: connected SlimMoE-specific factor override for expert `w1/w2/w3` modules was implemented and probed with both `factor_scales` and `factor_latents` strategies. Both correctly reached Phase 3, but both aborted on this RTX 3060 workspace with `reason=sample_too_slow` during FP-logit cache generation (`~87-88s` for the first 2048-token sample).
+
+For now, the recommended CUDA rerun command is the quantization-only path:
+
+```bash
+python scripts/run_stage1.py \
+  --model microsoft/Phi-tiny-MoE-instruct \
+  --output output/Phi-tiny-MoE-instruct \
+  --rank 8 \
+  --n-calibration 128 \
+  --seq-len 2048 \
+  --admm-iters 50 \
+  --checkpoint-dir output/Phi-tiny-MoE-instruct/checkpoints_cuda_rerun_20260308 \
+  --skip-eval
+```
+
+Then run evaluation separately with `scripts/run_eval.py`.
 
 ## Step 3: Run WikiText-2 Evaluation
 
@@ -133,3 +158,4 @@ results/Phi-tiny-MoE-instruct/
 
 results/SUMMARY.md               # Aggregated results table
 ```
+
