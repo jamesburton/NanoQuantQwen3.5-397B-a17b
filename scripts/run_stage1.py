@@ -2,9 +2,21 @@
 """Stage 1: NanoQuant quantization + evaluation."""
 
 import argparse
+import os
 import time
 import torch
 from nanoquant.quantize import quantize_model
+
+
+def _configure_cpu_threads():
+    """Set optimal thread counts for CPU-bound workloads."""
+    n_cores = os.cpu_count() or 1
+    torch.set_num_threads(n_cores)
+    torch.set_num_interop_threads(min(n_cores, 4))
+    # MKL/OpenMP environment (must be set before first BLAS call)
+    os.environ.setdefault("OMP_NUM_THREADS", str(n_cores))
+    os.environ.setdefault("MKL_NUM_THREADS", str(n_cores))
+    print(f"  CPU threads: {n_cores} (intra-op), {min(n_cores, 4)} (inter-op)")
 
 
 def evaluate_perplexity(model_path: str, device: str = "cuda") -> float:
@@ -13,8 +25,10 @@ def evaluate_perplexity(model_path: str, device: str = "cuda") -> float:
     from datasets import load_dataset
 
     tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+    # Use float32 on CPU (float16 matmuls produce NaN on CPU)
+    load_dtype = torch.float16 if device == "cuda" else torch.float32
     model = AutoModelForCausalLM.from_pretrained(
-        model_path, dtype=torch.float16, trust_remote_code=True, device_map=device
+        model_path, dtype=load_dtype, trust_remote_code=True, device_map=device
     )
     model.eval()
 
@@ -83,6 +97,8 @@ def main():
         args.checkpoint_dir = args.output + "/checkpoints"
 
     print(f"NanoQuant Stage 1")
+    if not torch.cuda.is_available():
+        _configure_cpu_threads()
     print(f"  Model: {args.model}")
     print(f"  Output: {args.output}")
     print(f"  Rank: {args.rank}")

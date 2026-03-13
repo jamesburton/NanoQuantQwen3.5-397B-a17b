@@ -120,6 +120,17 @@ def quantize_model(
     if checkpoint_dir:
         os.makedirs(checkpoint_dir, exist_ok=True)
 
+    # Maximize CPU thread utilization for BLAS-heavy workloads
+    if device == "cpu" or not torch.cuda.is_available():
+        n_cores = os.cpu_count() or 1
+        torch.set_num_threads(n_cores)
+        try:
+            torch.set_num_interop_threads(min(n_cores, 4))
+        except RuntimeError:
+            pass  # already set by caller
+        os.environ.setdefault("OMP_NUM_THREADS", str(n_cores))
+        os.environ.setdefault("MKL_NUM_THREADS", str(n_cores))
+
     print(f"Loading model: {model_name_or_path}")
     tokenizer = AutoTokenizer.from_pretrained(model_name_or_path, trust_remote_code=True)
 
@@ -129,9 +140,11 @@ def quantize_model(
 
     # Load model ONCE on CPU. Blocks move to GPU one at a time during reconstruction.
     # Never load twice — would require 2x model RAM and OOM on typical workstations.
+    # Use float32 on CPU (float16 matmuls can produce NaN without native FP16 compute).
+    load_dtype = torch.float16 if device != "cpu" else torch.float32
     model = AutoModelForCausalLM.from_pretrained(
         model_name_or_path,
-        dtype=torch.float16,
+        dtype=load_dtype,
         trust_remote_code=True,
         low_cpu_mem_usage=True,
         device_map="cpu",
