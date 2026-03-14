@@ -1,25 +1,25 @@
 {
   "model": "allenai/OLMoE-1B-7B-0924",
   "model_short_name": "OLMoE-1B-7B-0924",
-  "date": "2026-02-27",
+  "date": "2026-03-14",
   "hardware": {
     "gpu": "NVIDIA GeForce RTX 3060",
-    "peak_vram_gb": 0.0,
-    "peak_ram_gb": 34.27
+    "peak_vram_gb": 11.24,
+    "peak_ram_gb": 27.13
   },
   "model_size": {
     "fp16_gb": 12.89,
-    "quantized_gb": 12.89,
-    "compression_ratio": 1.0
+    "quantized_gb": 20.78,
+    "compression_ratio": 0.62
   },
   "timing": {
-    "baseline_eval_seconds": 12.2,
-    "quantized_eval_seconds": 4.3
+    "baseline_eval_seconds": 2360.5,
+    "quantized_eval_seconds": 2525.1
   },
   "perplexity": {
-    "fp16_baseline": null,
-    "quantized": null,
-    "degradation_ratio": null,
+    "fp16_baseline": 6.6181,
+    "quantized": 21425.2891,
+    "degradation_ratio": 3237.3857,
     "eval_settings": {
       "dataset": "wikitext-2-raw-v1",
       "split": "test",
@@ -34,5 +34,13 @@
     "n_calibration": null
   },
   "stage1_complete": true,
-  "loadable_checkpoint": false
+  "loadable_checkpoint": false,
+  "notes": {
+    "partial_quantization": true,
+    "blocks_quantized": 11,
+    "blocks_total": 16,
+    "blocks_quantized_pct": 68.75,
+    "failure_reason": "Non-finite block output detected after block 11 - numerical instability in ADMM at depth",
+    "impact": "PPL degradation is extreme (3237x) due to error accumulation in partially quantized model"
+  }
 }
