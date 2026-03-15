@@ -90,6 +90,7 @@ Progress: [█████████░] 91%
 
 - Phase 4 added: Phi MoE Support — PhimoeExperts fused gate_up_proj layout + Phi-tiny-MoE-instruct local validation
 - Phase 4 completed: All 3 plans done, PHI-01/02/03 satisfied
+- Phase 3 restructured (2026-03-15): 03-02 partial results unacceptable as cloud gate; added 03-02b (fix OLMoE all 16 blocks + usable PPL) and 03-02c (Qwen1.5 approach decision) before 03-03 can proceed
 
 ### Pending Todos
 
@@ -110,7 +111,7 @@ Progress: [█████████░] 91%
 ## Session Continuity
 
 Last session: 2026-03-15T12:00:32.857Z
-Stopped at: Completed 03-02 Tasks 1+2, at checkpoint Task 3 (human verification pending)
+Stopped at: Phase 3 restructured — executing 03-02b (fix OLMoE all blocks + usable PPL)
 Resume file: None
 
 
