@@ -67,7 +67,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Pipeline Foundation | 3/3 | Complete   | 2026-02-23 |
 | 2. MoE Support | 2/2 | Complete   | 2026-02-24 |
-| 3. Scaling and Evaluation | 0/3 | Not started | - |
+| 3. Scaling and Evaluation | 2/3 | In Progress|  |
 | 4. Phi MoE Support | 3/3 | Complete   | 2026-03-08 |
 
 ### Phase 4: Phi MoE Support

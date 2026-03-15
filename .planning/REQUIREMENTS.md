@@ -30,8 +30,8 @@ Requirements for initial release. Focused on Stage 1 pipeline with progressive m
 
 ### Model Scaling
 
-- [ ] **SCALE-01**: Verified working on OLMoE-1B-7B-0924 (smallest, consumer GPU validation)
-- [ ] **SCALE-02**: Verified working on Qwen1.5-MoE-3B-14B (small-medium scaling check)
+- [x] **SCALE-01**: Verified working on OLMoE-1B-7B-0924 (smallest, consumer GPU validation)
+- [x] **SCALE-02**: Verified working on Qwen1.5-MoE-3B-14B (small-medium scaling check)
 - [ ] **SCALE-03**: Verified working on Qwen2-MoE-57B (medium-large scaling)
 - [ ] **SCALE-04**: Verified working on Qwen3.5-397B-A17B (full target, likely requires cloud GPU)
 
@@ -83,8 +83,8 @@ Requirements for initial release. Focused on Stage 1 pipeline with progressive m
 | MOE-02 | Phase 2 | Complete |
 | MOE-03 | Phase 2 | Complete |
 | MOE-04 | Phase 2 | Complete |
-| SCALE-01 | Phase 3 | Pending |
-| SCALE-02 | Phase 3 | Pending |
+| SCALE-01 | Phase 3 | Complete |
+| SCALE-02 | Phase 3 | Complete |
 | SCALE-03 | Phase 3 | Pending |
 | SCALE-04 | Phase 3 | Pending |
 | EVAL-01 | Phase 3 | Complete |

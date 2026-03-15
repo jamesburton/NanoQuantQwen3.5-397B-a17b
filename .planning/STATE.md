@@ -1,3 +1,19 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+status: verifying
+stopped_at: Completed 03-02 Tasks 1+2, at checkpoint Task 3 (human verification pending)
+last_updated: "2026-03-15T12:00:32.863Z"
+last_activity: "2026-03-08 — Completed plan 04-03 (gap closure: factor key fix + WikiText-2 eval)"
+progress:
+  total_phases: 4
+  completed_phases: 3
+  total_plans: 11
+  completed_plans: 10
+  percent: 91
+---
+
 # Project State
 
 ## Project Reference
@@ -20,7 +36,7 @@ Plan: 3 of 3 in current phase (complete)
 Status: Phase 4 complete — all 3 plans done, all verification gaps closed
 Last activity: 2026-03-08 — Completed plan 04-03 (gap closure: factor key fix + WikiText-2 eval)
 
-Progress: [██████████] 100%
+Progress: [█████████░] 91%
 
 ## Performance Metrics
 
@@ -42,6 +58,7 @@ Progress: [██████████] 100%
 | Phase 03 P01 | 2 | 2 tasks | 3 files |
 | Phase 04-phi-moe-support P02 | - | 3 tasks (1 deferred) | 4 files |
 | Phase 04-phi-moe-support P03 | - | 2 tasks | 5 files |
+| Phase 03-scaling-and-evaluation P02 | 120 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -66,6 +83,8 @@ Progress: [██████████] 100%
 - [Phase 04-phi-moe-support P02]: SlimMoE uses nn.Linear experts (w1,w2,w3), not fused 3D tensors — existing nn.Linear traversal path handles them
 - [Phase 04-phi-moe-support P03]: Factor key collision bug — block-relative keys caused all 32 blocks to overwrite each other; fixed with block_prefix
 - [Phase 04-phi-moe-support P03]: CPU float32 fallback for eval pipeline (float16 matmuls produce NaN on CPU)
+- [Phase 03-scaling-and-evaluation]: Document partial quantization in metrics.json notes field with blocks_quantized/blocks_total when ADMM stops early
+- [Phase 03-scaling-and-evaluation]: When consumer GPU eval infeasible (CPU offload too slow), record null PPL with eval_skip_reason and defer to cloud GPU
 
 ### Roadmap Evolution
 
@@ -90,8 +109,8 @@ Progress: [██████████] 100%
 
 ## Session Continuity
 
-Last session: 2026-03-14
-Stopped at: Session resumed, proceeding to Phase 3 execution (03-02 or 03-03)
+Last session: 2026-03-15T12:00:32.857Z
+Stopped at: Completed 03-02 Tasks 1+2, at checkpoint Task 3 (human verification pending)
 Resume file: None
 
 
