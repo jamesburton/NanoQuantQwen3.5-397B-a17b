@@ -1,0 +1,50 @@
+{
+  "model": "Qwen/Qwen1.5-MoE-A2.7B",
+  "model_short_name": "Qwen1.5-MoE-A2.7B",
+  "date": "2026-03-15",
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 3060",
+    "peak_vram_gb": null,
+    "peak_ram_gb": null
+  },
+  "model_size": {
+    "fp16_gb": 26.67,
+    "quantized_gb": 11.28,
+    "compression_ratio": 2.36
+  },
+  "timing": {
+    "baseline_eval_seconds": null,
+    "quantized_eval_seconds": null
+  },
+  "perplexity": {
+    "fp16_baseline": null,
+    "quantized": null,
+    "degradation_ratio": null,
+    "eval_settings": {
+      "dataset": "wikitext-2-raw-v1",
+      "split": "test",
+      "stride": 512,
+      "max_length": 2048
+    }
+  },
+  "quantization_config": {
+    "rank": 819,
+    "bits_per_weight": null,
+    "admm_iters": null,
+    "n_calibration": null
+  },
+  "stage1_complete": true,
+  "loadable_checkpoint": false,
+  "notes": {
+    "partial_quantization": true,
+    "blocks_quantized": 5,
+    "blocks_total": 24,
+    "blocks_quantized_pct": 20.83,
+    "eval_skipped": true,
+    "eval_skip_reason": "Qwen1.5-MoE-A2.7B is 26.67 GB FP16, exceeding 12 GB VRAM. CPU offload reduces eval throughput to ~298s/window (581 windows = ~48h). PPL eval is deferred to cloud GPU run (Phase 3 plan 03-03 or dedicated re-run with full VRAM).",
+    "quantization_factors_size_gb": 11.28,
+    "compression_ratio_by_size": 2.36,
+    "layer_count_quantized": 935,
+    "impact": "No PPL comparison available for this model on local hardware. Checkpoint is present and can be evaluated when sufficient VRAM is available."
+  }
+}
