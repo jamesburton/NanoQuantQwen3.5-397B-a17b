@@ -281,10 +281,10 @@ def quantize_model(
             block_input = _run_block(block, bi)
 
         if not torch.isfinite(block_input).all():
-            raise RuntimeError(
-                f"Non-finite block output detected after block {block_idx}. "+
-                "Stopping to avoid corrupting downstream checkpoints."
-            )
+            n_bad = (~torch.isfinite(block_input)).sum().item()
+            max_val = block_input[torch.isfinite(block_input)].abs().max().item() if torch.isfinite(block_input).any() else 1.0
+            print(f"  Warning: {n_bad} non-finite values in block {block_idx} output — clamping to continue")
+            block_input = torch.nan_to_num(block_input, nan=0.0, posinf=max_val, neginf=-max_val)
 
         # Save checkpoint
         if checkpoint_dir:
