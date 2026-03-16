@@ -9,6 +9,8 @@ files_modified:
   - results/OLMoE-1B-7B-0924/metrics.json
   - results/SUMMARY.md
 autonomous: false
+status: complete
+outcome: pipeline_validated_quality_insufficient
 requirements:
   - SCALE-01
 

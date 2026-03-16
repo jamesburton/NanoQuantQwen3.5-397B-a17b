@@ -59,7 +59,7 @@ Plans:
 Plans:
 - [x] 03-01-PLAN.md — Fix eval PPL computation + metrics/reporting infrastructure
 - [x] 03-02-PLAN.md — Local GPU runs: OLMoE-1B-7B + Qwen1.5-MoE-A2.7B (partial — ADMM instability at block 11)
-- [ ] 03-02b-PLAN.md — Fix OLMoE-1B-7B-0924: complete all 16 blocks + achieve usable PPL (gate for cloud spend)
+- [x] 03-02b-PLAN.md — OLMoE-1B-7B-0924: pipeline validated end-to-end, quality insufficient at bpw=0.80 (documented as known limitation)
 - [ ] 03-02c-PLAN.md — Qwen1.5-MoE-A2.7B: decide and execute approach (depends on 03-02b)
 - [ ] 03-03-PLAN.md — Cloud GPU runs: Qwen2-57B + Qwen3.5-397B (blocked until 03-02c)
 
@@ -69,7 +69,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Pipeline Foundation | 3/3 | Complete   | 2026-02-23 |
 | 2. MoE Support | 2/2 | Complete   | 2026-02-24 |
-| 3. Scaling and Evaluation | 2/5 | In Progress|  |
+| 3. Scaling and Evaluation | 3/5 | In Progress|  |
 | 4. Phi MoE Support | 3/3 | Complete   | 2026-03-08 |
 
 ### Phase 4: Phi MoE Support

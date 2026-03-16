@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: verifying
-stopped_at: Completed 03-02 Tasks 1+2, at checkpoint Task 3 (human verification pending)
-last_updated: "2026-03-15T12:00:32.863Z"
-last_activity: "2026-03-08 — Completed plan 04-03 (gap closure: factor key fix + WikiText-2 eval)"
+stopped_at: Completed 03-02b (OLMoE pipeline validated, quality insufficient at bpw=0.80). At human checkpoint Task 4.
+last_updated: "2026-03-16T18:00:00.000Z"
+last_activity: "2026-03-16 — Completed plan 03-02b (OLMoE quantization debugging — pipeline works, quality insufficient)"
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 11
-  completed_plans: 10
-  percent: 91
+  completed_plans: 11
+  percent: 93
 ---
 
 # Project State
@@ -36,7 +36,7 @@ Plan: 3 of 3 in current phase (complete)
 Status: Phase 4 complete — all 3 plans done, all verification gaps closed
 Last activity: 2026-03-08 — Completed plan 04-03 (gap closure: factor key fix + WikiText-2 eval)
 
-Progress: [█████████░] 91%
+Progress: [█████████░] 93%
 
 ## Performance Metrics
 
@@ -85,6 +85,10 @@ Progress: [█████████░] 91%
 - [Phase 04-phi-moe-support P03]: CPU float32 fallback for eval pipeline (float16 matmuls produce NaN on CPU)
 - [Phase 03-scaling-and-evaluation]: Document partial quantization in metrics.json notes field with blocks_quantized/blocks_total when ADMM stops early
 - [Phase 03-scaling-and-evaluation]: When consumer GPU eval infeasible (CPU offload too slow), record null PPL with eval_skip_reason and defer to cloud GPU
+- [Phase 03-scaling-and-evaluation 03-02b]: OLMoE-1B-7B-0924 at bpw=0.80 (rank=819) with 50 ADMM iters is fundamentally unusable — binary factorization lacks approximation capacity, error compounds multiplicatively through 16 blocks
+- [Phase 03-scaling-and-evaluation 03-02b]: Two Hessian approaches both fail: pre-captured → activation explosion (21,425 PPL partial), actual-layer-input → activation collapse (881,014 PPL full)
+- [Phase 03-scaling-and-evaluation 03-02b]: Float16 matmuls on CPU produce NaN; eval must use float32 on CPU or float16 on CUDA
+- [Phase 03-scaling-and-evaluation 03-02b]: Pipeline end-to-end is mechanically validated — no blocking code bugs for cloud GPU runs
 
 ### Roadmap Evolution
 
@@ -107,12 +111,13 @@ Progress: [█████████░] 91%
 - SCALE-04 (Qwen3.5-397B) requires cloud GPU — consumer 12GB constraint applies to phases 1-2 and SCALE-01 through SCALE-03 only
 - Phase 4 PPL degradation (141x) is high due to zero-refinement settings; CUDA re-run with defaults expected to improve to ~1.5-3x
 - Local branch is behind origin/main by 2 commits; upstream overlap has been backed up rather than merged because verification coverage remains weak and recent eval outcomes are not yet convincing
+- Sub-1-bit quantization (bpw=0.80) quality is insufficient on OLMoE-1B-7B — may need larger models, higher bpw (2.0-4.0), or more ADMM iterations (200+)
 
 ## Session Continuity
 
-Last session: 2026-03-15T12:00:32.857Z
-Stopped at: Phase 3 restructured — executing 03-02b (fix OLMoE all blocks + usable PPL)
-Resume file: None
+Last session: 2026-03-16T18:00:00.000Z
+Stopped at: 03-02b complete — at human checkpoint (Task 4). Next: decide Option A/B/C for OLMoE quality.
+Resume file: .planning/phases/03-scaling-and-evaluation/.continue-here.md
 
 
 

@@ -1,25 +1,25 @@
 {
   "model": "allenai/OLMoE-1B-7B-0924",
   "model_short_name": "OLMoE-1B-7B-0924",
-  "date": "2026-03-14",
+  "date": "2026-03-16",
   "hardware": {
     "gpu": "NVIDIA GeForce RTX 3060",
     "peak_vram_gb": 11.24,
-    "peak_ram_gb": 27.13
+    "peak_ram_gb": 33.42
   },
   "model_size": {
     "fp16_gb": 12.89,
-    "quantized_gb": 20.78,
-    "compression_ratio": 0.62
+    "quantized_gb": 30.05,
+    "compression_ratio": 0.43
   },
   "timing": {
-    "baseline_eval_seconds": 2360.5,
-    "quantized_eval_seconds": 2525.1
+    "baseline_eval_seconds": 3035.0,
+    "quantized_eval_seconds": 0.0
   },
   "perplexity": {
     "fp16_baseline": 6.6181,
-    "quantized": 21425.2891,
-    "degradation_ratio": 3237.3857,
+    "quantized": null,
+    "degradation_ratio": null,
     "eval_settings": {
       "dataset": "wikitext-2-raw-v1",
       "split": "test",
@@ -29,18 +29,29 @@
   },
   "quantization_config": {
     "rank": 819,
-    "bits_per_weight": null,
-    "admm_iters": null,
-    "n_calibration": null
+    "bits_per_weight": 0.80,
+    "admm_iters": 50,
+    "n_calibration": 128
   },
   "stage1_complete": true,
-  "loadable_checkpoint": false,
+  "loadable_checkpoint": true,
+  "blocks_quantized": 16,
   "notes": {
-    "partial_quantization": true,
-    "blocks_quantized": 11,
+    "status": "pipeline_validated_quality_insufficient",
+    "partial_quantization": false,
+    "blocks_quantized": 16,
     "blocks_total": 16,
-    "blocks_quantized_pct": 68.75,
-    "failure_reason": "Non-finite block output detected after block 11 - numerical instability in ADMM at depth",
-    "impact": "PPL degradation is extreme (3237x) due to error accumulation in partially quantized model"
+    "quantized_ppl_partial_10_blocks": 21425,
+    "quantized_ppl_full_16_blocks": 881014,
+    "fp16_baseline_ppl": 6.6181,
+    "quality_assessment": "Unusable. Two Hessian approaches tested: (a) pre-captured Hessians caused activation explosion (7.8x at block 2 to 314x at block 10), PPL 21,425 for 10 quantized blocks + 6 FP16; (b) actual-layer-input Hessians caused activation collapse (50x below baseline), PPL 881,014 for all 16 blocks.",
+    "root_cause": "Binary factorization at bpw=0.80 with 50 ADMM iterations lacks sufficient approximation capacity for OLMoE weight matrices. Error compounds multiplicatively through 16 blocks.",
+    "pipeline_status": "End-to-end pipeline mechanically works: Hessian capture, ADMM block-wise reconstruction, checkpoint save, model reconstruction, WikiText-2 PPL eval. No blocking code bugs.",
+    "float16_cpu_warning": "Float16 matmuls on CPU produce NaN. Eval must use float32 on CPU or float16 on CUDA.",
+    "bug_fixes_applied": [
+      "nanoquant/quantize.py: clamp non-finite block output instead of raise RuntimeError",
+      "scripts/recover_checkpoint.py: new script to rebuild factors from block checkpoints",
+      "Hessian fix attempted and reverted (activation collapse worse than explosion)"
+    ]
   }
 }
