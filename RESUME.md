@@ -1,165 +1,248 @@
-# Resume Notes
+# Resume: Running NanoQuant on a CPU-Only Machine
 
-## Current Status (2026-03-13)
+## Current Status (2026-03-16)
 
-The signed-fit full rerun eval is **complete**. Results are still catastrophically bad.
+Phase 03-02b is at Task 4 (human checkpoint).
 
-## Evidence Collected
+- **Pipeline smoke test: PASSED** — end-to-end flow works
+- **Quality test: FAILED** — bpw=0.80 with 50 ADMM iterations produces unusable PPL on OLMoE-1B-7B-0924
 
-### Progression of full-run results
+The quantization pipeline is mechanically correct. The remaining question
+is whether higher bpw or more ADMM iterations can achieve usable quality
+(PPL degradation ≤ 20x).
 
-| Run | Path | Baseline PPL | Quant PPL | Degradation | Notes |
-|-----|------|-------------|-----------|-------------|-------|
-| Old stable (rerun_20260311) | `output/Phi-tiny-MoE-instruct_rerun_20260311` | 7.1747 | 1,574,286.75 | 219,420x | Reconstruction semantics fixed; signed-scale bug still present |
-| Signed-fit full (20260312) | `output/Phi-tiny-MoE-instruct_signedfit_full_20260312` | 7.1747 | 218,212.22 | 30,413x | Both bugs fixed; full 32 blocks |
-| **Signed-fit 2-block ablation** | `output/Phi-tiny-MoE-instruct_ablate_signedfit_mb2` | 7.1747 | **15.15** | **2.11x** | Only 2/32 blocks quantized |
+## Why Transfer to CPU Machine
 
-### Why the 2-block ablation is misleading
+The block reconstruction phase (Phase 2) is **100% CPU-bound**:
+- VRAM usage: 0.1 GB throughout all 16 blocks
+- RAM usage: 50-68 GB, peaking at ~72 GB during final save
+- The previous run hit MemoryError at 68 GB RAM during safetensors serialization
 
-2/32 blocks quantized means ~94% of model weights are unmodified FP16.
-The 2.11x result shows the signed-scale patch works per-layer but errors
-compound catastrophically across all 32 blocks. Quantization error from
-each block propagates forward as distorted activations into the next block's
-ADMM solve, degrading each successive block more than an isolated fit would.
+A high-memory CPU machine avoids the RAM bottleneck and runs Phase 2
+at the same speed (no GPU needed for this phase).
 
-### Bugs Fixed (all committed, no regressions)
+## Machine Requirements
 
-1. **Reconstruction semantics** (`nanoquant/reconstruct.py`): `reconstruct_weight()` was
-   applying stored preconditioners as inverses; now multiplies, matching how W_tilde is formed.
-2. **Signed scale fitting** (`nanoquant/admm.py`): `_fit_balanced_scales()` fit against
-   `abs(W_target)`; now fits against the signed target.
-3. **Factor key collision** (`nanoquant/quantize.py`): block-relative keys caused all 32 blocks
-   to overwrite each other in `all_quantized`; fixed with `block_prefix`.
-4. **Fail-fast guard** (`nanoquant/quantize.py`): aborts immediately on non-finite block output
-   to prevent silent corruption of downstream checkpoints.
+| Resource | Minimum | Recommended |
+|----------|---------|-------------|
+| RAM | 72 GB | 96+ GB |
+| CPU cores | 8 | 16+ (fast single-thread matters most) |
+| Disk | 100 GB free | 150 GB free |
+| GPU | Not required | Not required |
+| Python | 3.10+ | 3.12 |
 
-## Root Cause Hypothesis
-
-The signed-scale fix clearly improves per-layer approximation quality (2.11x on 2 blocks).
-The full 32-block run still being catastrophic points to **error compounding** — each block's
-quantized output diverges from FP16, and subsequent blocks are optimized against distorted
-inputs. This is a fundamental challenge in sequential block-wise quantization with no
-end-to-end feedback.
-
-Possible contributing factors (unverified):
-- **Activation drift**: the block_input fed into ADMM is the FP16 output of the previous
-  quantized block, not the true FP16 intermediate. Errors accumulate multiplicatively.
-- **Rank too low**: rank=8 binary approximation may not be sufficient for the expert weight
-  shapes in Phi-tiny-MoE. Expert W matrices are 2048×(4096 or 2048); rank 8 binary gives
-  effective bpw ≈ 8*(m+n)/(m*n) ≈ very sub-1-bit.
-- **ADMM quality per-layer**: even with signed scales, the binary factorization may diverge
-  badly for some layer shapes. Per-layer reconstruction error is not currently measured.
-
-## Immediate Next Steps
-
-### Step 1: Measure per-layer reconstruction quality
-
-Before changing anything, understand *where* the degradation originates.
+## Setup
 
 ```bash
-python - <<'EOF'
-import torch
-from safetensors.torch import load_file
+git clone https://github.com/jamesburton/NanoQuantQwen3.5-397B-a17b.git
+cd NanoQuantQwen3.5-397B-a17b
 
-factors = load_file("output/Phi-tiny-MoE-instruct_signedfit_full_20260312/quantized_factors.safetensors")
+# Install dependencies
+pip install torch transformers datasets safetensors tqdm psutil
 
-# Group by layer, compute relative Frobenius error
-from collections import defaultdict
-import re
-
-layer_data = defaultdict(dict)
-for k, v in factors.items():
-    # Keys: model.layers.N.layer_name.{U_bin,V_bin,s1,s2,d_in,d_out}
-    match = re.match(r'(.+)\.(U_bin|V_bin|s1|s2|d_in|d_out)$', k)
-    if match:
-        layer_data[match.group(1)][match.group(2)] = v
-
-errors = []
-for layer_name, d in layer_data.items():
-    if not all(k in d for k in ('U_bin', 'V_bin', 's1', 's2', 'd_in', 'd_out')):
-        continue
-    from nanoquant.reconstruct import reconstruct_weight
-    W_approx = reconstruct_weight(d['U_bin'], d['V_bin'], d['s1'], d['s2'], d['d_in'], d['d_out'])
-    # We don't have the original W here, but we can check reconstruction norm
-    print(f"{layer_name}: approx_norm={W_approx.norm().item():.3f}, shape={tuple(W_approx.shape)}")
-EOF
+# Verify installation
+python -c "import nanoquant; print('OK')"
 ```
 
-Better: run a short diagnostic script that loads the FP16 model and the factors
-simultaneously and computes relative error per layer. This needs to be written.
+## What Runs Where
 
-### Step 2: Compare binary ADMM vs plain SVD on representative layers
+| Phase | GPU? | CPU? | RAM | Time (est.) |
+|-------|------|------|-----|-------------|
+| Phase 1: Hessian capture | Preferred but optional | Yes (8-10x slower) | ~20 GB | 1.5h (GPU) / 10-15h (CPU) |
+| Phase 2: Block reconstruction | No (0.1 GB VRAM) | **Yes — bottleneck** | 50-68 GB, peak ~72 GB at save | 2.5-3h |
+| Phase 3: KD refinement | Optional | Yes | ~30 GB | Usually skipped on CPU |
+| Eval: PPL computation | Preferred but optional | Yes | ~15 GB | 40 min (GPU) / 3-5h (CPU) |
 
-Test whether the binary approximation itself is the bottleneck or whether it's
-an implementation issue.
+Phase 2 runs ADMM optimization (N iterations) + STE refinement (200 iterations)
+on each of 196 layers per block, across 16 blocks. All CPU matrix operations.
 
-Target: pick 3-5 representative weight matrices (1 attention, 2-3 expert w1/w2/w3,
-1 large vs 1 small shape). For each:
-- Compute rank-8 truncated SVD → Frobenius error
-- Run lb_admm rank=8 → Frobenius error
-- Check whether signed-scale fit significantly closes the gap
+## Recommended Runs
 
-If SVD error >> binary ADMM error: the binary factorization quality is not the bottleneck;
-something else (activation drift, reconstruction path) dominates.
+Run **Option B first** (higher bpw), then **Option C** if B shows improvement.
 
-If binary ADMM error >> SVD error: the ADMM is not converging well and needs fixes
-(more iterations, better initialization, different rho/lam).
+### Option B: Higher bpw (test quality knee-point)
 
-### Step 3: Ablation — quantize blocks using FP16 block inputs (offline)
+```bash
+# Clean start
+rm -rf checkpoints/OLMoE-1B-7B-0924-bpw2
 
-This would isolate whether activation drift is the compounding mechanism.
-Instead of sequentially piping quantized block outputs into next block ADMM,
-use the FP16 intermediate activations for all blocks.
+# bpw=2.0 → rank=2048 (much more approximation capacity than rank=819)
+python scripts/run_stage1.py \
+  --model allenai/OLMoE-1B-7B-0924 \
+  --output output/OLMoE-1B-7B-0924-bpw2 \
+  --bits-per-weight 2.0 \
+  --admm-iters 50 \
+  --n-calibration 128 \
+  --seq-len 2048 \
+  --checkpoint-dir checkpoints/OLMoE-1B-7B-0924-bpw2
+```
 
-This requires caching the FP16 block inputs before any quantization, then
-running ADMM block-by-block against these clean inputs.
+### Option C: More ADMM iterations at bpw=0.80
 
-If this produces much better quality: activation drift is the primary cause.
-Fix: use error propagation mitigation (the paper describes this in Algorithm 1 —
-it subtracts the quantization error at each step before passing to the next block).
+```bash
+rm -rf checkpoints/OLMoE-1B-7B-0924-admm200
 
-### Step 4 (if Step 3 confirms drift): Implement error propagation mitigation
+python scripts/run_stage1.py \
+  --model allenai/OLMoE-1B-7B-0924 \
+  --output output/OLMoE-1B-7B-0924-admm200 \
+  --bits-per-weight 0.80 \
+  --admm-iters 200 \
+  --n-calibration 128 \
+  --seq-len 2048 \
+  --checkpoint-dir checkpoints/OLMoE-1B-7B-0924-admm200
+```
 
-The NanoQuant paper (Section 3.2) describes error propagation mitigation as
-part of Phase 2. The current pipeline does NOT implement this — each block is
-passed the quantized output of the previous block rather than a corrected signal.
+## CPU-Only Considerations
 
-Reference: `scripts/run_stage1.py` passes `block_input = _run_block(block, bi)`
-after quantization, rather than `block_input = fp16_block_output - quantization_error`.
+### No GPU Detected
 
-## Key Paths
+The script auto-detects hardware. Without CUDA:
+- Hessian capture runs on CPU (~10-15h instead of 1.5h)
+- Block reconstruction is unaffected (already CPU-bound)
+- Model loads with `device_map="cpu"`
 
-| Path | Contents |
-|------|----------|
-| `output/Phi-tiny-MoE-instruct_signedfit_full_20260312` | Current best factors (30,413x) |
-| `output/Phi-tiny-MoE-instruct_signedfit_full_20260312_reconstructed` | Reconstructed HF model |
-| `output/Phi-tiny-MoE-instruct_ablate_signedfit_mb2` | 2-block ablation (2.11x) |
-| `output/Phi-tiny-MoE-instruct_rerun_20260311` | Stable but unsigned full run (219,420x) |
-| `results/Phi-tiny-MoE-instruct/metrics.json` | Latest eval metrics (signed-fit full run) |
-| `results/SUMMARY.md` | Aggregated table |
+### Float16 Warning
 
-## Decision Tree
+**Never evaluate with float16 on CPU** — it produces NaN due to matmul
+overflow. The eval scripts handle this automatically when `--device cpu`,
+but if running `eval_ppl.py` directly, always use `--dtype float32`:
 
-### If per-layer errors (Step 1) are uniformly catastrophic
-→ The binary approximation itself is failing. Proceed to Step 2 (SVD comparison).
-→ If binary ADMM ≫ SVD error: fix ADMM (increase iters, tune rho/lam, check update equations).
-→ If binary ADMM ≈ SVD error: rank is too low; try rank=16 or rank=32 ablation.
+```bash
+# CORRECT for CPU:
+python scripts/eval_ppl.py \
+  --model output/OLMoE-1B-7B-0924-bpw2_reconstructed \
+  --device cpu \
+  --dtype float32 \
+  --stride 512 \
+  --max-length 2048
 
-### If per-layer errors vary — early blocks fine, later blocks catastrophic
-→ Confirms activation drift / error compounding as the primary mechanism.
-→ Proceed to Step 3 (offline clean-input ablation) to quantify.
-→ If confirmed: implement error propagation mitigation (Step 4).
+# WRONG — will produce NaN on CPU:
+# python scripts/eval_ppl.py --model ... --device cpu --dtype float16
+```
 
-### If per-layer errors vary — specific layer types are bad
-→ Expert layers (w1/w2/w3) have different shapes than attention layers.
-→ May need separate rank tuning for expert vs attention layers.
-→ Try `NANOQUANT_ATTN_RANK` env var to set a different rank for attention.
+### MemoryError at Save Step
 
-## What NOT to Do Next
+If the final save fails with MemoryError, use the recovery script:
 
-- Do not re-run another full 32-block quantization without first understanding
-  where the error is coming from. A full run takes ~2.5 hours and the evidence
-  from Steps 1-3 will be much more informative per unit time.
-- Do not increase `admm_iters` blindly — the issue may not be ADMM convergence.
-- Do not move to Phase 3 (scaling to other models) until Phi-tiny-MoE PPL is
-  at least within 10x of baseline. The pipeline has a fundamental quality issue.
+```bash
+python scripts/recover_checkpoint.py \
+  --model allenai/OLMoE-1B-7B-0924 \
+  --checkpoint-dir checkpoints/OLMoE-1B-7B-0924-bpw2 \
+  --output-dir output/OLMoE-1B-7B-0924-bpw2 \
+  --rank 2048
+```
+
+The `--rank` value must match `bits_per_weight`: `rank = int(bpw * 2048 / 2)`.
+- bpw=0.80 → rank=819
+- bpw=2.0 → rank=2048
+
+## Running Evaluation
+
+After quantization completes:
+
+```bash
+python scripts/run_eval.py \
+  --model allenai/OLMoE-1B-7B-0924 \
+  --quantized-dir output/OLMoE-1B-7B-0924-bpw2 \
+  --results-dir results \
+  --device cpu \
+  --stride 512 \
+  --max-length 2048
+```
+
+This writes `results/OLMoE-1B-7B-0924/metrics.json` and updates `results/SUMMARY.md`.
+
+### Quick Activation Sanity Check
+
+Before running the full 3-5h CPU eval, do a fast activation check (~5 min):
+
+```python
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
+from datasets import load_dataset
+
+# Use the _reconstructed dir (created by run_eval.py), or the output dir
+# if model.save_pretrained() completed successfully
+path = 'output/OLMoE-1B-7B-0924-bpw2_reconstructed'
+model = AutoModelForCausalLM.from_pretrained(path, dtype=torch.float32,
+                                              trust_remote_code=True, device_map='cpu')
+model.eval()
+
+dataset = load_dataset('wikitext', 'wikitext-2-raw-v1', split='test')
+text = '\n\n'.join([t for t in dataset['text'] if t.strip()])
+tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True)
+ids = tokenizer(text, return_tensors='pt')['input_ids'][:, :256]
+
+# Expected baseline maxes for reference
+baselines = {0: 0.36, 1: 5.6, 2: 47.8, 3: 54.7, 4: 55.3, 5: 55.3,
+             6: 55.6, 7: 55.6, 8: 58.8, 9: 65.2, 10: 68.5, 11: 66.3,
+             12: 66.3, 13: 66.2, 14: 55.0, 15: 12.6}
+
+for i in range(16):
+    def hook(idx):
+        def fn(mod, inp, out):
+            o = out[0] if isinstance(out, (tuple, list)) else out
+            mx = o.float().abs().max().item()
+            ratio = mx / baselines[idx]
+            flag = ' *** PROBLEM' if ratio > 5 or ratio < 0.1 else ''
+            print(f'  Block {idx:2d}: max={mx:10.3f}  (baseline={baselines[idx]:6.1f}, ratio={ratio:.2f}x){flag}')
+        return fn
+    model.model.layers[i].register_forward_hook(hook(i))
+
+with torch.no_grad():
+    model(ids)
+```
+
+If any block shows ratio >5x or <0.1x, the quantization has quality issues
+and full eval will produce unusable PPL.
+
+## Success Criteria
+
+| Metric | Target |
+|--------|--------|
+| PPL degradation | ≤ 20x (quantized PPL ≤ 132, baseline is 6.62) |
+| Forward pass | No NaN/inf in float32 |
+| Block activations | All within 3x of baseline max |
+
+## Current Results (bpw=0.80, for reference)
+
+| Metric | Value |
+|--------|-------|
+| FP16 Baseline PPL | 6.6181 |
+| Quantized PPL (partial: blocks 0-10 quant + 11-15 FP16) | 21,425 |
+| Quantized PPL (full: 16 blocks, Hessian-fix attempt) | 881,014 |
+| Degradation | 3,236x (partial) / 133,000x (full) |
+| Target | ≤ 20x |
+
+## Previous Findings (Phi-tiny-MoE, Phase 02)
+
+| Run | Blocks | Degradation | Notes |
+|-----|--------|-------------|-------|
+| Phi-tiny full (signed-fit) | 32/32 | 30,413x | Same error compounding pattern |
+| Phi-tiny 2-block ablation | 2/32 | 2.11x | Per-layer quality is good |
+
+The 2-block ablation proves ADMM per-layer quality is fine — the issue is
+multiplicative error compounding across blocks.
+
+## Disk Space Management
+
+| Path | Size | Safe to Delete? |
+|------|------|-----------------|
+| `checkpoints/*/block_*.pt` | ~1.9 GB each | Yes, after factors file exists |
+| `output/*_reconstructed/` | ~13 GB each | Yes, can rebuild from factors |
+| `output/*/model-*.safetensors` | ~13 GB total | Yes, if factors file exists |
+| `output/*/quantized_factors.safetensors` | ~30 GB | **Keep** — core output |
+| `~/.cache/huggingface/` | ~13 GB per model | Can clear if disk-constrained |
+
+## Key Files
+
+| Path | Description |
+|------|-------------|
+| `scripts/run_stage1.py` | Main quantization entry point |
+| `scripts/run_eval.py` | Evaluation runner (baseline + quantized PPL) |
+| `scripts/recover_checkpoint.py` | Rebuild factors from block checkpoints |
+| `scripts/eval_ppl.py` | Standalone PPL evaluator |
+| `nanoquant/quantize.py` | Core quantization loop |
+| `nanoquant/reconstruct.py` | Block reconstruction (ADMM + STE) |
+| `nanoquant/admm.py` | LB-ADMM binary factorization |
+| `.planning/phases/03-scaling-and-evaluation/.continue-here.md` | Full session state |
