@@ -298,16 +298,25 @@ def reconstruct_block(
         m, n = W.shape
         local_rank = attn_rank_override if attn_rank_override and ".self_attn." in wv.name else rank
 
-        # Look up Hessian diagonal
-        h_key = get_hessian_key(wv, block_prefix)
-        d_in = None
-        for k in hessians:
-            if k == h_key or k.endswith("." + wv.name.split(".")[0]):
-                d_in = robust_diagonal(hessians[k].to(device), gamma=gamma)
-                break
-        if d_in is None:
-            # Fallback: use identity (no Hessian available for this layer)
-            d_in = torch.ones(n, device=device, dtype=torch.float32)
+        # Compute Hessian diagonal from actual layer inputs (captured above with
+        # quantized-previous-block outputs). This avoids the mismatch where
+        # pre-captured hessians use original model activations while reconstruction
+        # uses quantized previous block outputs, which caused activation explosion.
+        if wv.name in layer_inputs_map:
+            X = layer_inputs_map[wv.name]
+            H_diag = (X * X).mean(0)
+            d_in = robust_diagonal(H_diag, gamma=gamma)
+        else:
+            # Fallback: use pre-captured Hessians (e.g. for fused experts)
+            h_key = get_hessian_key(wv, block_prefix)
+            d_in = None
+            for k in hessians:
+                if k == h_key or k.endswith("." + wv.name.split(".")[0]):
+                    d_in = robust_diagonal(hessians[k].to(device), gamma=gamma)
+                    break
+            if d_in is None:
+                # Final fallback: identity (no Hessian available)
+                d_in = torch.ones(n, device=device, dtype=torch.float32)
         d_out = torch.ones(m, device=device, dtype=torch.float32)
 
         # LB-ADMM quantization
